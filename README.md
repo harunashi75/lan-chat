@@ -47,7 +47,7 @@ Le serveur est gelé avec PyInstaller, qui ne cross-compile pas : construire cha
 Remarques :
 - Les paquets ne sont pas signés : Windows SmartScreen affichera un avertissement au premier lancement, et l'AppImage doit être rendue exécutable (`chmod +x`). Sans FUSE : `./LAN-Chat-*.AppImage --appimage-extract-and-run`.
 - L'application packagée lance son serveur sur le port `LAN_CHAT_PORT` (8765 par défaut) ; Windows peut demander d'autoriser le réseau local dans son pare-feu pour que d'autres machines rejoignent le salon.
-- L'icône est `assets/icon.png`, regénérable avec `node scripts/make-icon.cjs`.
+- L'icône est dessinée en SVG (`static/icon.svg`, aussi utilisée comme favicon et logo). `assets/icon.png` (fenêtres Electron et paquets) en est dérivée : `node scripts/make-icon.cjs` après modification du SVG.
 - Version : modifier `version` dans `package.json`.
 
 ## Interface

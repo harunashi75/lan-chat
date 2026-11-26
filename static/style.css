@@ -60,11 +60,8 @@ button{border:0;cursor:pointer}
   box-shadow:var(--shadow);
 }
 .brand{display:flex;align-items:center;gap:11px;padding:3px 9px 22px}
-.logo{
-  width:44px;height:44px;border-radius:15px;
-  background:var(--blue-soft);display:grid;place-items:center;
-  font-size:24px;box-shadow:0 8px 22px rgba(22,131,255,.12)
-}
+.logo{width:44px;height:44px;border-radius:13px;flex:none;box-shadow:0 8px 22px rgba(22,131,255,.2)}
+.welcome-logo{display:block;width:64px;height:64px;margin:0 0 16px;border-radius:19px;box-shadow:0 10px 26px rgba(22,131,255,.25)}
 .brand strong{font-size:18px;letter-spacing:-.4px}
 
 .voice-card{

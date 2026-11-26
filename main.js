@@ -4,6 +4,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 
 // Keep Chromium's GPU defaults. The actual encoder is visible in video diagnostics.
+const APP_ICON = path.join(__dirname,'assets','icon.png');
 let mainWindow;
 let pythonProcess;
 let store;
@@ -129,7 +130,7 @@ async function createMainWindow() {
   const previousWindow = mainWindow;
   const target = store.get('user_role') === 'host' ? await startServer() : validatedUrl(store.get('remote_url')).href;
   trustedOrigin = new URL(target).origin;
-  mainWindow = new BrowserWindow({width:1280,height:850,title:'LAN Chat',autoHideMenuBar:true,
+  mainWindow = new BrowserWindow({width:1280,height:850,title:'LAN Chat',icon:APP_ICON,autoHideMenuBar:true,
     webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}});
   mainWindow.webContents.setWindowOpenHandler(() => ({action:'deny'}));
   mainWindow.webContents.on('will-navigate',(event,url) => {
@@ -140,7 +141,7 @@ async function createMainWindow() {
 }
 
 function createSetupWindow() {
-  const win = new BrowserWindow({width:500,height:440,title:'Configuration · LAN Chat',autoHideMenuBar:true,
+  const win = new BrowserWindow({width:500,height:440,title:'Configuration · LAN Chat',icon:APP_ICON,autoHideMenuBar:true,
     webPreferences:{preload:path.join(__dirname,'desktop-preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   win.loadFile('setup.html');
 }

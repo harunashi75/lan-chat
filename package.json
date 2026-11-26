@@ -50,7 +50,8 @@
       "desktop-preload.js",
       "setup.html",
       "capture-picker.html",
-      "package.json"
+      "package.json",
+      "assets/icon.png"
     ],
     "extraResources": [
       {
