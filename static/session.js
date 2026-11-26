@@ -42,6 +42,7 @@ let videoBudget = 40000000;
 export const getClientId = () => clientId;
 export const getName = () => name;
 export const getPassword = () => password;
+export const getToken = () => token;
 export const isReady = () => ready;
 export const getRtcConfig = () => rtcConfig;
 export const getVideoBudget = () => videoBudget;

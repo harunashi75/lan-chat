@@ -2,6 +2,7 @@
 import { $, showToast } from "../util.js";
 import { emojiData, emojiIcons } from "../emoji.js";
 import { send } from "../session.js";
+import { prepareImage, uploadImage } from "./images.js";
 import { setConnection } from "./connection.js";
 import { notifyTyping, resetTypingNotice } from "./typing.js";
 
@@ -9,6 +10,8 @@ const input = $("messageInput");
 const sendButton = $("sendButton");
 const picker = $("emojiPicker");
 let enabled = false;
+let sending = false;
+let attachment = null; // { blob, w, h, url }: the image waiting to be sent with the next message
 
 export function setComposerEnabled(value) {
   enabled = value;
@@ -18,21 +21,64 @@ export function setComposerEnabled(value) {
 }
 
 function updateSendButton() {
-  sendButton.disabled = !enabled || !input.value.trim();
+  sendButton.disabled = !enabled || sending || (!input.value.trim() && !attachment);
 }
 
-function sendMessage() {
+function clearAttachment() {
+  if (attachment) URL.revokeObjectURL(attachment.url);
+  attachment = null;
+  $("attachment").hidden = true;
+  $("attachmentPreview").removeAttribute("src");
+  updateSendButton();
+}
+
+async function attachFile(file) {
+  if (!enabled || !file) return;
+  try {
+    const prepared = await prepareImage(file);
+    clearAttachment();
+    attachment = { ...prepared, url: URL.createObjectURL(prepared.blob) };
+    $("attachmentPreview").src = attachment.url;
+    $("attachmentInfo").textContent = `${prepared.w} × ${prepared.h} · ${Math.max(1, Math.round(prepared.blob.size / 1024))} Ko`;
+    $("attachment").hidden = false;
+    $("messages").scrollTop = $("messages").scrollHeight; // the preview shrinks the list: stay at the bottom
+    updateSendButton();
+    input.focus();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+const firstImage = files => [...(files || [])].find(file => file.type.startsWith("image/"));
+
+async function sendMessage() {
   const text = input.value.trim();
-  if (!text || !enabled) return;
-  if (!send({ type: "message", text })) {
+  if (!enabled || sending || (!text && !attachment)) return;
+  const payload = { type: "message", text };
+  if (attachment) {
+    sending = true;
+    updateSendButton();
+    try {
+      const id = await uploadImage(attachment.blob);
+      payload.image = { id, w: attachment.w, h: attachment.h };
+    } catch (error) {
+      showToast(error.message);
+      sending = false;
+      updateSendButton();
+      return;
+    }
+    sending = false;
+  }
+  if (!send(payload)) {
     showToast("Impossible d'envoyer le message");
     setConnection("Connexion interrompue", "err");
+    updateSendButton();
     return;
   }
   input.value = "";
   input.style.height = "40px";
+  clearAttachment();
   resetTypingNotice();
-  updateSendButton();
   input.focus();
 }
 
@@ -90,6 +136,38 @@ export function initComposer() {
     }
   });
   sendButton.addEventListener("click", sendMessage);
+
+  // Attach an image: file picker, paste (Ctrl+V) or drag and drop.
+  $("attachButton").addEventListener("click", () => $("fileInput").click());
+  $("fileInput").addEventListener("change", () => {
+    attachFile(firstImage($("fileInput").files));
+    $("fileInput").value = "";
+  });
+  $("attachmentRemove").addEventListener("click", clearAttachment);
+  document.addEventListener("paste", event => {
+    const file = firstImage(event.clipboardData?.files);
+    if (!file || !enabled) return;
+    event.preventDefault();
+    attachFile(file);
+  });
+  let dragDepth = 0;
+  const hasFiles = event => [...(event.dataTransfer?.types || [])].includes("Files");
+  document.addEventListener("dragenter", event => {
+    if (!hasFiles(event)) return;
+    dragDepth++;
+    $("dropZone").classList.add("show");
+  });
+  document.addEventListener("dragover", event => { if (hasFiles(event)) event.preventDefault(); });
+  document.addEventListener("dragleave", event => {
+    if (hasFiles(event) && --dragDepth <= 0) { dragDepth = 0; $("dropZone").classList.remove("show"); }
+  });
+  document.addEventListener("drop", event => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    dragDepth = 0;
+    $("dropZone").classList.remove("show");
+    attachFile(firstImage(event.dataTransfer.files));
+  });
   $("emojiButton").addEventListener("click", event => {
     event.stopPropagation();
     picker.classList.toggle("open");

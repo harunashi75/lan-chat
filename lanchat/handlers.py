@@ -32,6 +32,20 @@ def handle_signal(room, client, cid, data):
         target.send({'type': 'signal', 'from': cid, 'signal': signal})
 
 
+def attach_image(room, cid, image):
+    """Validate the image reference of a message and claim the upload. Returns the public metadata."""
+    if not image:
+        return None
+    if not isinstance(image, dict) or not isinstance(image.get('id'), str):
+        raise ValueError('Image invalide')
+    if not room.images.claim(image['id'], cid):
+        raise ValueError('Image introuvable ou déjà utilisée')
+
+    def dimension(value):  # only used to reserve space in the layout; clamp whatever the client says
+        return value if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 10000 else None
+    return {'id': image['id'], 'w': dimension(image.get('w')), 'h': dimension(image.get('h'))}
+
+
 def handle_typing(room, cid):
     """Tell the others that this user is typing. Not stored: it is only a live hint."""
     room.broadcast({'type': 'typing', 'id': cid, 'name': room.users[cid]['name']}, exclude=cid)
@@ -43,13 +57,15 @@ def handle_chat(room, cid, data):
     kind = data['type']
     if kind == 'message':
         text = str(data.get('text', '')).strip()[:2000]
-        if not text:
+        image = attach_image(room, cid, data.get('image'))
+        if not text and not image:
             raise ValueError('Message vide')
-        room.messages.append({'msg_id': 'msg_' + uuid.uuid4().hex, 'id': cid,
-                              'name': user['name'], 'pc': user['pc'], 'text': text,
-                              'time': time.time(), 'reactions': {}})
-        del room.messages[:-200]
-        room.broadcast({'type': 'message', 'message': room.messages[-1]})
+        message = {'msg_id': 'msg_' + uuid.uuid4().hex, 'id': cid, 'name': user['name'], 'pc': user['pc'],
+                   'text': text, 'time': time.time(), 'reactions': {}}
+        if image:
+            message['image'] = image
+        room.add_message(message)
+        room.broadcast({'type': 'message', 'message': message})
         return
     elif kind == 'react':
         emoji = str(data.get('emoji', '')).strip()[:64]

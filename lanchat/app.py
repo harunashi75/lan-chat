@@ -5,8 +5,9 @@ import os
 from aiohttp import web
 
 from .config import BASE_DIR, ORIGINS_KEY, PASSWORD_KEY, ROOM_KEY, RTC_KEY, load_rtc_config
+from .images import MAX_IMAGE_BYTES
 from .room import Room
-from .routes import config, index, no_store_static, websocket
+from .routes import config, index, no_store_static, serve_image, upload_image, websocket
 
 
 async def close_clients(app):
@@ -15,7 +16,7 @@ async def close_clients(app):
 
 
 def create_app():
-    app = web.Application(client_max_size=131072)
+    app = web.Application(client_max_size=MAX_IMAGE_BYTES)
     app[ROOM_KEY] = Room()
     app[RTC_KEY] = load_rtc_config()
     app[PASSWORD_KEY] = os.environ.get('LAN_CHAT_PASSWORD', '')
@@ -26,5 +27,7 @@ def create_app():
     app.router.add_static('/static', BASE_DIR / 'static')
     app.on_response_prepare.append(no_store_static)
     app.router.add_get('/ws', websocket)
+    app.router.add_post('/upload', upload_image)
+    app.router.add_get('/img/{image_id:[0-9a-f]{32}}', serve_image)
     app.on_shutdown.append(close_clients)
     return app

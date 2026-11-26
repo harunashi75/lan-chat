@@ -3,10 +3,13 @@ import asyncio
 import json
 import time
 
+from .images import ImageStore
+
 SEND_TIMEOUT = 5          # seconds a single send may take before the peer is dropped
 MAX_QUEUE = 200           # messages waiting for one slow peer before it is dropped
 
 # (burst, refill per second) per connection and kind of message.
+UPLOAD_LIMIT = (5, 0.3)   # burst of 5 images, then one every ~3 s, per client
 RATE_LIMITS = {'chat': (10, 2.0), 'presence': (20, 5.0), 'signal': (300, 150.0), 'typing': (6, 1.0)}
 MAX_VIOLATIONS = 50
 
@@ -65,6 +68,16 @@ class Room:
         self.sockets = {}   # client id -> Client
         self.tokens = {}
         self.messages = []
+        self.images = ImageStore()
+        self.upload_buckets = {}  # client id -> TokenBucket for /upload
+
+    def add_message(self, message):
+        """Append to the history (last 200 kept) and free the images of the messages that fall off."""
+        self.messages.append(message)
+        for old in self.messages[:-200]:
+            if old.get('image'):
+                self.images.delete(old['image']['id'])
+        del self.messages[:-200]
 
     def users_payload(self):
         users = list(self.users.values())

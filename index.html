@@ -66,6 +66,7 @@
       <div class="screen-grid" id="screenGrid"></div>
     </section>
     <div class="screen-backdrop" id="screenBackdrop"></div>
+    <div class="drop-zone" id="dropZone" aria-hidden="true"><div>🖼️<strong>Dépose ton image ici</strong><small>Elle sera réduite avant l'envoi</small></div></div>
 
     <section class="messages" id="messages">
       <div class="empty" id="empty">Aucun message pour le moment ✨</div>
@@ -73,12 +74,19 @@
 
     <div class="composer-wrap">
       <div class="typing" id="typing" aria-live="polite"></div>
+      <div class="attachment" id="attachment" hidden>
+        <img id="attachmentPreview" alt="Image à envoyer">
+        <span class="attachment-text"><strong>Image prête à envoyer</strong><small id="attachmentInfo"></small></span>
+        <button class="attachment-remove" id="attachmentRemove" type="button" aria-label="Retirer l'image">✕</button>
+      </div>
       <div class="composer">
         <div class="emoji-picker" id="emojiPicker">
           <div class="emoji-tabs" id="emojiTabs"></div>
           <div class="emoji-grid" id="emojiGrid"></div>
         </div>
 
+        <button class="icon-button" id="attachButton" type="button" title="Joindre une image" aria-label="Joindre une image">🖼️</button>
+        <input type="file" id="fileInput" accept="image/*" hidden>
         <button class="icon-button" id="emojiButton" type="button" title="Emojis" aria-label="Choisir un emoji">😊</button>
         <textarea id="messageInput" rows="1" maxlength="2000" placeholder="Écrire un message..." aria-label="Message" disabled></textarea>
         <button class="send" id="sendButton" type="button" title="Envoyer" aria-label="Envoyer le message" disabled>↑</button>
@@ -250,6 +258,11 @@
       </section>
     </div>
   </div>
+</div>
+
+<div class="lightbox" id="lightbox" hidden>
+  <img id="lightboxImage" alt="Image en grand">
+  <button class="lightbox-close" type="button" aria-label="Fermer l'image">✕</button>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

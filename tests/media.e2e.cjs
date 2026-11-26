@@ -81,6 +81,36 @@ try {
   await bob.waitForFunction(() => document.getElementById('typing').textContent.includes('Alice écrit'),null,{timeout:5000});
   await alice.click('#sendButton');
   await bob.waitForFunction(() => document.getElementById('typing').textContent === '');
+  // Images: attach with the file picker, send with a caption, view full size; paste and drop also attach.
+  const drawPng = () => alice.evaluate(() => {
+    const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#e04a7a'; ctx.fillRect(0,0,640,360);
+    ctx.fillStyle = '#fff'; ctx.font = '60px sans-serif'; ctx.fillText('LAN Chat', 180, 200);
+    return canvas.toDataURL('image/png').split(',')[1];
+  });
+  await alice.setInputFiles('#fileInput',{name:'photo.png',mimeType:'image/png',buffer:Buffer.from(await drawPng(),'base64')});
+  await alice.waitForSelector('#attachment:not([hidden])');
+  await alice.fill('#messageInput','regardez ça');await alice.click('#sendButton');
+  await bob.waitForFunction(() => { const img = document.querySelector('.chat-image'); return img && img.complete && img.naturalWidth > 0; },null,{timeout:10000});
+  assert.equal(await bob.evaluate(() => document.querySelector('.bubble.has-image .bubble-text').textContent),'regardez ça');
+  await bob.click('.chat-image');await bob.waitForSelector('#lightbox:not([hidden])');
+  await bob.keyboard.press('Escape');await bob.waitForSelector('#lightbox',{state:'hidden'});
+  await alice.evaluate(async () => {
+    const canvas = document.createElement('canvas'); canvas.width = 50; canvas.height = 50;
+    const blob = await new Promise(resolve => canvas.toBlob(resolve,'image/png'));
+    const transfer = new DataTransfer(); transfer.items.add(new File([blob],'coller.png',{type:'image/png'}));
+    document.dispatchEvent(new ClipboardEvent('paste',{clipboardData:transfer,bubbles:true,cancelable:true}));
+  });
+  await alice.waitForSelector('#attachment:not([hidden])');
+  await alice.click('#attachmentRemove');await alice.waitForSelector('#attachment',{state:'hidden'});
+  await alice.evaluate(async () => {
+    const canvas = document.createElement('canvas'); canvas.width = 50; canvas.height = 50;
+    const blob = await new Promise(resolve => canvas.toBlob(resolve,'image/png'));
+    const transfer = new DataTransfer(); transfer.items.add(new File([blob],'depose.png',{type:'image/png'}));
+    document.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));
+  });
+  await alice.waitForSelector('#attachment:not([hidden])');
+  await alice.click('#attachmentRemove');
   // A message that arrives while the window is in the background raises the unread counter.
   await bob.evaluate(() => { document.hasFocus = () => false; });
   await alice.fill('#messageInput','compteur');await alice.click('#sendButton');

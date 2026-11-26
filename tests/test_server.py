@@ -1,4 +1,5 @@
 import asyncio
+import io
 import json
 import os
 import unittest
@@ -6,6 +7,7 @@ import unittest
 from aiohttp import WSMsgType
 from aiohttp.test_utils import AioHTTPTestCase
 
+from lanchat.images import ImageStore
 from server import Client, Room, create_app
 
 
@@ -247,6 +249,99 @@ class SlowPeerTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.05)
         self.assertEqual([json.loads(s)['n'] for s in fake.sent], list(range(50)))
         room.sockets['a'].stop()
+
+
+PNG = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+       b'\x00\x00\x00\rIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfe\xa7\x9a\xa0\xa0\x00\x00\x00\x00IEND\xaeB`\x82')
+
+
+class ImageTests(AioHTTPTestCase):
+    async def get_application(self):
+        return create_app()
+
+    async def join(self, cid):
+        token = cid.ljust(16, 'x')
+        ws = await self.client.ws_connect(f'/ws?client={cid}&token={token}')
+        await ws.send_json({'type': 'presence', 'name': cid})
+        await ws.receive_json()
+        return ws, {'X-Client-Id': cid, 'X-Token': token}
+
+    async def upload(self, headers, body=PNG):
+        return await self.client.post('/upload', data=io.BytesIO(body), headers=headers)
+
+    async def test_upload_message_and_download(self):
+        alice, alice_headers = await self.join('alice')
+        bob, _ = await self.join('bob')
+        response = await self.upload(alice_headers)
+        self.assertEqual(response.status, 200)
+        image_id = (await response.json())['id']
+        await alice.send_json({'type': 'message', 'text': 'voici', 'image': {'id': image_id, 'w': 1, 'h': 1}})
+        while True:
+            data = await bob.receive_json()
+            if data['type'] == 'message':
+                break
+        self.assertEqual(data['message']['image'], {'id': image_id, 'w': 1, 'h': 1})
+        image = await self.client.get(f'/img/{image_id}')
+        self.assertEqual((image.status, image.content_type), (200, 'image/png'))
+        self.assertEqual(await image.read(), PNG)
+        self.assertEqual(image.headers['X-Content-Type-Options'], 'nosniff')
+        self.assertIn("default-src 'none'", image.headers['Content-Security-Policy'])
+        # An image can be attached to one message only, and only by whoever uploaded it.
+        await alice.send_json({'type': 'message', 'text': 'encore', 'image': {'id': image_id}})
+        while (data := await alice.receive_json())['type'] != 'error':
+            pass
+        self.assertIn('introuvable', data['error'])
+        await alice.close()
+        await bob.close()
+
+    async def test_upload_is_authenticated_and_validated(self):
+        alice, headers = await self.join('alice')
+        self.assertEqual((await self.client.post('/upload', data=PNG)).status, 403)
+        wrong = {**headers, 'X-Token': 'z' * 16}
+        self.assertEqual((await self.upload(wrong)).status, 403)
+        self.assertEqual((await self.upload(headers, b'<svg onload=alert(1)></svg>')).status, 415)
+        self.assertEqual((await self.upload(headers, b'')).status, 415)
+        too_big = PNG + b'\x00' * (3 * 1024 * 1024)
+        self.assertEqual((await self.upload(headers, too_big)).status, 413)
+        self.assertEqual((await self.client.get('/img/' + '0' * 32)).status, 404)
+        # Somebody else cannot claim alice's upload.
+        bob, _ = await self.join('bob')
+        image_id = (await (await self.upload(headers)).json())['id']
+        await bob.send_json({'type': 'message', 'text': 'vol', 'image': {'id': image_id}})
+        while (await bob.receive_json())['type'] != 'error':
+            pass
+        await alice.close()
+        await bob.close()
+
+    async def test_upload_rate_limit(self):
+        alice, headers = await self.join('alice')
+        statuses = [(await self.upload(headers)).status for _ in range(8)]
+        self.assertEqual(statuses[:5], [200] * 5)
+        self.assertIn(429, statuses)
+        await alice.close()
+
+
+class ImageStoreTests(unittest.TestCase):
+    def test_oldest_images_are_evicted_over_the_memory_limit(self):
+        store = ImageStore(limit=100)
+        first = store.add('a', b'x' * 60, 'image/png')
+        second = store.add('a', b'x' * 60, 'image/png')
+        self.assertIsNone(store.get(first))
+        self.assertIsNotNone(store.get(second))
+        self.assertLessEqual(store.total, 100)
+
+    def test_images_leave_with_their_messages_and_stale_uploads_expire(self):
+        room = Room()
+        image_id = room.images.add('a', b'img', 'image/png')
+        room.images.claim(image_id, 'a')
+        room.add_message({'msg_id': 'm0', 'image': {'id': image_id}})
+        for index in range(200):
+            room.add_message({'msg_id': f'm{index + 1}'})
+        self.assertIsNone(room.images.get(image_id))
+        pending = room.images.add('a', b'img', 'image/png')
+        room.images.items[pending]['time'] -= 10_000
+        room.images.add('a', b'other', 'image/png')
+        self.assertIsNone(room.images.get(pending))
 
 
 class PasswordTests(AioHTTPTestCase):

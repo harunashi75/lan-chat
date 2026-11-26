@@ -1,10 +1,13 @@
 // Message list: incremental rendering, reactions and the quick-reaction pickers.
 import { $, showToast, initials, escapeHtml, avatarHue } from "../util.js";
 import { renderMessageText, bindEmojiFallback, isAnimatedEmojiOnly } from "../emoji.js";
+import { openLightbox, initLightbox } from "./lightbox.js";
 import { send, getName, getClientId } from "../session.js";
 import { userName } from "./users.js";
 
 const MAX_MESSAGES = 200;
+const MAX_IMAGE_WIDTH = 360;  // keep in sync with .chat-image in style.css
+const MAX_IMAGE_HEIGHT = 320;
 const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "🎉", "👀"];
 const GROUP_WINDOW = 5 * 60; // seconds: messages from the same person closer than this are grouped
 const messageRows = new Map(); // msg_id -> { row, msg, reactions, divider }
@@ -14,10 +17,41 @@ let lastMessage = null;        // previous message in the list, for grouping and
 let animatedEmoji = localStorage.getItem("lan_chat_animated_emoji") === "1";
 export const isAnimatedEmoji = () => animatedEmoji;
 
+// Shared image: reserves its space from the sent size so the list does not jump while it loads.
+function buildImage(image) {
+  const img = document.createElement("img");
+  img.className = "chat-image";
+  img.src = `/img/${image.id}`;
+  img.alt = "Image partagée";
+  img.loading = "lazy";
+  if (image.w && image.h) {
+    // Fix the displayed size up front (never above the original) so the bubble hugs the image.
+    const scale = Math.min(1, MAX_IMAGE_WIDTH / image.w, MAX_IMAGE_HEIGHT / image.h);
+    img.style.width = `${Math.round(image.w * scale)}px`;
+    img.style.height = `${Math.round(image.h * scale)}px`;
+  }
+  img.addEventListener("click", () => openLightbox(img.src));
+  img.addEventListener("error", () => {
+    // The server keeps a bounded number of images: old ones disappear.
+    const gone = document.createElement("div");
+    gone.className = "image-gone";
+    gone.textContent = "🖼️ Image expirée";
+    img.replaceWith(gone);
+  }, { once: true });
+  return img;
+}
+
 function renderBubble(row, msg) {
   const bubble = row.querySelector(".bubble");
-  bubble.innerHTML = renderMessageText(msg.text, animatedEmoji);
-  bindEmojiFallback(bubble);
+  bubble.replaceChildren();
+  if (msg.image) bubble.append(buildImage(msg.image));
+  if (msg.text) {
+    const text = document.createElement("div");
+    text.className = "bubble-text";
+    text.innerHTML = msg.image ? escapeHtml(msg.text) : renderMessageText(msg.text, animatedEmoji);
+    bindEmojiFallback(text);
+    bubble.append(text);
+  }
 }
 
 export function setAnimatedEmoji(value) {
@@ -67,7 +101,7 @@ function buildMessageRow(msg, grouped) {
       <div class="message-avatar" style="--h:${avatarHue(msg.id)}">${escapeHtml(initials(msg.name))}</div>
       <div class="message-body">
         <div class="meta">${escapeHtml(msg.name)} · ${timeText}</div>
-        <div class="bubble ${isAnimatedEmojiOnly(msg.text) ? "emoji-only-bubble" : ""}"></div>
+        <div class="bubble ${msg.image ? "has-image" : isAnimatedEmojiOnly(msg.text) ? "emoji-only-bubble" : ""}"></div>
         <div class="reactions-bar"></div>
       </div>
     </div>`;
@@ -154,5 +188,6 @@ function toggleReaction(event, msgId, emoji) {
 }
 
 export function initMessages() {
+  initLightbox();
   document.addEventListener("click", () => closePickers());
 }
