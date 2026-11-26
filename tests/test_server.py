@@ -1,9 +1,10 @@
 import asyncio
+import json
 import os
 import unittest
 from aiohttp.test_utils import AioHTTPTestCase
 from aiohttp import WSMsgType
-from server import create_app
+from server import Client, Room, create_app
 
 
 class SignalingTests(AioHTTPTestCase):
@@ -121,6 +122,25 @@ class SignalingTests(AioHTTPTestCase):
         await alice.close()
         await bob.close()
 
+    async def test_chat_flood_is_rate_limited(self):
+        alice = await self.connect('alice')
+        bob = await self.connect('bob')
+        for i in range(40):
+            await alice.send_json({'type': 'message', 'text': f'spam {i}'})
+        warning = await self.delta(alice, 'error')
+        self.assertIn('ralentissez', warning['error'])
+        # Only the burst got through; the connection stays usable once tokens refill.
+        await asyncio.sleep(1.2)
+        await alice.send_json({'type': 'message', 'text': 'apres'})
+        texts = []
+        async with asyncio.timeout(3):
+            while not texts or texts[-1] != 'apres':
+                delta = await self.delta(bob, 'message')
+                texts.append(delta['message']['text'])
+        self.assertLess(len(texts), 20)
+        await alice.close()
+        await bob.close()
+
     async def test_joiner_gets_snapshot_then_only_deltas(self):
         alice = await self.connect('alice')
         await alice.send_json({'type': 'message', 'text': 'avant'})
@@ -151,6 +171,46 @@ class SignalingTests(AioHTTPTestCase):
         self.assertEqual(next(u['name'] for u in state['users'] if u['id'] == 'alice'), 'Alice')
         await alice.close()
         await bob.close()
+
+
+class FakeSocket:
+    def __init__(self, stuck=False):
+        self.stuck, self.sent, self.closed, self.close_code = stuck, [], False, None
+
+    async def send_str(self, text):
+        if self.stuck:
+            await asyncio.sleep(3600)
+        self.sent.append(text)
+
+    async def close(self, code=1000, message=b''):
+        self.closed, self.close_code = True, code
+
+
+class SlowPeerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stuck_peer_is_dropped_and_does_not_delay_others(self):
+        room = Room()
+        stuck, healthy = FakeSocket(stuck=True), FakeSocket()
+        room.sockets['stuck'] = Client(stuck, max_queue=3)
+        room.sockets['ok'] = Client(healthy, max_queue=3)
+        for i in range(10):
+            room.broadcast({'type': 'message', 'n': i})
+            await asyncio.sleep(0)
+        await asyncio.sleep(0.05)
+        self.assertEqual(len(healthy.sent), 10)
+        self.assertTrue(stuck.closed)
+        self.assertEqual(stuck.close_code, 1013)
+        for client in room.sockets.values():
+            client.stop()
+
+    async def test_order_is_preserved_per_peer(self):
+        room = Room()
+        fake = FakeSocket()
+        room.sockets['a'] = Client(fake)
+        for i in range(50):
+            room.broadcast({'n': i})
+        await asyncio.sleep(0.05)
+        self.assertEqual([json.loads(s)['n'] for s in fake.sent], list(range(50)))
+        room.sockets['a'].stop()
 
 
 class PasswordTests(AioHTTPTestCase):

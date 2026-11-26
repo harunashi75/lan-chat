@@ -44,13 +44,68 @@ def load_rtc_config():
     return {'iceServers': servers, 'mediaTopology': 'mesh', 'videoBudget': budget}
 
 
+SEND_TIMEOUT = 5          # seconds a single send may take before the peer is dropped
+MAX_QUEUE = 200           # messages waiting for one slow peer before it is dropped
+
+# (burst, refill per second) per connection and kind of message.
+RATE_LIMITS = {'chat': (10, 2.0), 'presence': (20, 5.0), 'signal': (300, 150.0)}
+MAX_VIOLATIONS = 50
+
+
+class TokenBucket:
+    def __init__(self, capacity, rate):
+        self.capacity, self.rate = capacity, rate
+        self.tokens, self.stamp = float(capacity), time.monotonic()
+
+    def allow(self):
+        now = time.monotonic()
+        self.tokens = min(self.capacity, self.tokens + (now - self.stamp) * self.rate)
+        self.stamp = now
+        if self.tokens >= 1:
+            self.tokens -= 1
+            return True
+        return False
+
+
+class Client:
+    """One websocket with its own outgoing queue.
+
+    Every send is queued and written by a dedicated task, so message order is kept
+    per peer while a slow or stuck peer can never delay the others or the sender.
+    """
+
+    def __init__(self, ws, max_queue=MAX_QUEUE):
+        self.ws = ws
+        self.queue = asyncio.Queue(max_queue)
+        self.task = asyncio.create_task(self._writer())
+
+    def send(self, payload):
+        self.send_text(json.dumps(payload))
+
+    def send_text(self, text):
+        try:
+            self.queue.put_nowait(text)
+        except asyncio.QueueFull:
+            # The peer cannot keep up: drop it; it will reconnect and resync.
+            asyncio.ensure_future(self.ws.close(code=1013, message=b'Trop lent'))
+
+    async def _writer(self):
+        try:
+            while True:
+                await asyncio.wait_for(self.ws.send_str(await self.queue.get()), SEND_TIMEOUT)
+        except (ConnectionError, RuntimeError, asyncio.TimeoutError):
+            await self.ws.close()
+
+    def stop(self):
+        self.task.cancel()
+
+
 class Room:
     def __init__(self):
         self.users = {}
-        self.sockets = {}
+        self.sockets = {}   # client id -> Client
         self.tokens = {}
         self.messages = []
-        self.broadcast_lock = asyncio.Lock()
 
     def users_payload(self):
         users = list(self.users.values())
@@ -62,15 +117,10 @@ class Room:
         """Full state, sent once to a socket that joins. Later changes are deltas."""
         return {**self.users_payload(), 'type': 'state', 'messages': self.messages[-200:]}
 
-    async def broadcast(self, payload=None):
-        async with self.broadcast_lock:
-            data = payload or self.users_payload()
-            async def deliver(ws):
-                try:
-                    await asyncio.wait_for(ws.send_json(data), 5)
-                except (ConnectionError, RuntimeError, asyncio.TimeoutError):
-                    await ws.close()
-            await asyncio.gather(*(deliver(ws) for ws in list(self.sockets.values()) if not ws.closed))
+    def broadcast(self, payload=None):
+        text = json.dumps(payload or self.users_payload())
+        for client in list(self.sockets.values()):
+            client.send_text(text)
 
 
 async def index(request):
@@ -108,7 +158,7 @@ def clean_name(value, fallback):
     return str(value or '').strip()[:40] or fallback
 
 
-async def handle_presence(room, ws, cid, data, first):
+def handle_presence(room, client, cid, data, first):
     user = {'id': cid, 'name': clean_name(data.get('name'), 'Utilisateur'),
             'pc': 'Navigateur', 'in_voice': data.get('in_voice') is True,
             'sharing_screen': data.get('sharing_screen') is True,
@@ -117,19 +167,19 @@ async def handle_presence(room, ws, cid, data, first):
     if changed:
         room.users[cid] = user
     if first:
-        await ws.send_json(room.snapshot())
+        client.send(room.snapshot())
     if changed:
-        await room.broadcast()
+        room.broadcast()
 
 
-async def handle_signal(room, ws, cid, data):
+def handle_signal(room, client, cid, data):
     target = room.sockets.get(data.get('target'))
     signal = data.get('signal')
-    if target is not None and target is not ws and isinstance(signal, dict):
-        await target.send_json({'type': 'signal', 'from': cid, 'signal': signal})
+    if target is not None and target is not client and isinstance(signal, dict):
+        target.send({'type': 'signal', 'from': cid, 'signal': signal})
 
 
-async def handle_chat(room, cid, data):
+def handle_chat(room, cid, data):
     """Chat actions; the sender is always the authenticated socket's identity."""
     user = room.users[cid]
     kind = data['type']
@@ -141,7 +191,7 @@ async def handle_chat(room, cid, data):
                               'name': user['name'], 'pc': user['pc'], 'text': text,
                               'time': time.time(), 'reactions': {}})
         del room.messages[:-200]
-        await room.broadcast({'type': 'message', 'message': room.messages[-1]})
+        room.broadcast({'type': 'message', 'message': room.messages[-1]})
         return
     elif kind == 'react':
         emoji = str(data.get('emoji', '')).strip()[:64]
@@ -157,7 +207,7 @@ async def handle_chat(room, cid, data):
                     names.append(cid)
                 if not names:
                     del msg['reactions'][emoji]
-                await room.broadcast({'type': 'reactions', 'msg_id': msg['msg_id'], 'reactions': msg['reactions']})
+                room.broadcast({'type': 'reactions', 'msg_id': msg['msg_id'], 'reactions': msg['reactions']})
                 break
         return
 
@@ -180,12 +230,16 @@ async def websocket(request):
     if not hmac.compare_digest(known.encode(), token.encode()):
         await ws.close(code=4003, message=b'Jeton invalide')
         return ws
+    client = Client(ws)
     previous = room.sockets.get(cid)
-    room.sockets[cid] = ws
-    if previous is not None and not previous.closed:
+    room.sockets[cid] = client
+    if previous is not None and not previous.ws.closed:
         # Same owner reconnecting (e.g. after a network drop): the new socket wins.
-        await previous.close(code=4001, message=b'Session reprise')
+        await previous.ws.close(code=4001, message=b'Session reprise')
     synced = False
+    buckets = {kind: TokenBucket(*limit) for kind, limit in RATE_LIMITS.items()}
+    violations = 0
+    last_warning = 0.0
     try:
         async for message in ws:
             if message.type != WSMsgType.TEXT:
@@ -195,32 +249,44 @@ async def websocket(request):
                 if not isinstance(data, dict):
                     raise ValueError('Objet attendu')
                 kind = data.get('type')
+                bucket = buckets['presence' if kind == 'presence' else 'signal' if kind == 'signal' else 'chat']
+                if not bucket.allow():
+                    violations += 1
+                    if violations > MAX_VIOLATIONS:
+                        await ws.close(code=4008, message=b'Trop de requetes')
+                        break
+                    if time.monotonic() - last_warning > 1:
+                        last_warning = time.monotonic()
+                        client.send({'type': 'error', 'error': 'Trop de messages, ralentissez'})
+                    continue
                 if kind == 'presence':
-                    await handle_presence(room, ws, cid, data, not synced)
+                    handle_presence(room, client, cid, data, not synced)
                     synced = True
                 elif cid not in room.users:
                     raise ValueError('Rejoignez le salon')
                 elif kind == 'signal':
-                    await handle_signal(room, ws, cid, data)
+                    handle_signal(room, client, cid, data)
                 elif kind in ('message', 'react'):
-                    await handle_chat(room, cid, data)
+                    handle_chat(room, cid, data)
                 else:
                     raise ValueError('Type inconnu')
-            except (ValueError, TypeError, ConnectionError, RuntimeError) as error:
-                await ws.send_json({'type': 'error', 'error': str(error) or 'Message invalide'})
+            except (ValueError, TypeError) as error:
+                client.send({'type': 'error', 'error': str(error) or 'Message invalide'})
     finally:
-        if room.sockets.get(cid) is ws:
+        # No await here: the handler may already be cancelled when the peer disconnects.
+        client.stop()
+        if room.sockets.get(cid) is client:
             room.sockets.pop(cid, None)
             room.users.pop(cid, None)
             # Keep the token while the identity still owns messages in the history.
             if not any(m['id'] == cid for m in room.messages):
                 room.tokens.pop(cid, None)
-            await asyncio.shield(room.broadcast())
+            room.broadcast()
     return ws
 
 
 async def cleanup(app):
-    await asyncio.gather(*(ws.close(code=1001, message=b'Server shutdown') for ws in list(app[ROOM_KEY].sockets.values())))
+    await asyncio.gather(*(client.ws.close(code=1001, message=b'Server shutdown') for client in list(app[ROOM_KEY].sockets.values())))
 
 
 async def no_store_static(request, response):
