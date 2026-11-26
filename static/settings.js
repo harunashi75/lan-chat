@@ -1,6 +1,6 @@
 // Settings window (profile, appearance, screen sharing, diagnostics, about) and the theme.
-import { $, showToast, initials } from "./util.js";
-import { getName, setName } from "./session.js";
+import { $, showToast, initials, avatarHue } from "./util.js";
+import { getName, setName, getClientId } from "./session.js";
 
 const THEME_KEY = "lan_chat_theme";
 const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
@@ -71,6 +71,7 @@ export function refreshProfile() {
   $("selfAvatar").textContent = initials(name);
   $("profileName").textContent = name;
   $("profileAvatar").textContent = initials(name);
+  for (const id of ["selfAvatar", "profileAvatar"]) $(id).style.setProperty("--h", avatarHue(getClientId()));
 }
 
 function renameSelf(isJoined) {

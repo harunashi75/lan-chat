@@ -1,12 +1,14 @@
 // Message list: incremental rendering, reactions and the quick-reaction pickers.
-import { $, showToast, initials, escapeHtml } from "../util.js";
+import { $, showToast, initials, escapeHtml, avatarHue } from "../util.js";
 import { renderMessageText, bindEmojiFallback, isAnimatedEmojiOnly } from "../emoji.js";
 import { send, getName, getClientId } from "../session.js";
 import { userName } from "./users.js";
 
 const MAX_MESSAGES = 200;
 const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "🎉", "👀"];
-const messageRows = new Map(); // msg_id -> { row, msg, reactions }
+const GROUP_WINDOW = 5 * 60; // seconds: messages from the same person closer than this are grouped
+const messageRows = new Map(); // msg_id -> { row, msg, reactions, divider }
+let lastMessage = null;        // previous message in the list, for grouping and day dividers
 
 // Animated emoji are loaded from Google's servers: off unless the user opts in.
 let animatedEmoji = localStorage.getItem("lan_chat_animated_emoji") === "1";
@@ -29,10 +31,31 @@ function nearBottom() {
   return list.scrollHeight - list.scrollTop - list.clientHeight < 120;
 }
 
-function buildMessageRow(msg) {
+const dayKey = seconds => new Date(seconds * 1000).toDateString();
+
+function dayLabel(seconds) {
+  const date = new Date(seconds * 1000);
+  if (dayKey(seconds) === new Date().toDateString()) return "Aujourd'hui";
+  if (dayKey(seconds) === new Date(Date.now() - 86400000).toDateString()) return "Hier";
+  return date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+}
+
+function buildDayDivider(seconds) {
+  const divider = document.createElement("div");
+  divider.className = "day-divider";
+  divider.innerHTML = `<span>${escapeHtml(dayLabel(seconds))}</span>`;
+  return divider;
+}
+
+function isGrouped(msg) {
+  return lastMessage && lastMessage.id === msg.id && msg.time - lastMessage.time < GROUP_WINDOW &&
+    dayKey(msg.time) === dayKey(lastMessage.time);
+}
+
+function buildMessageRow(msg, grouped) {
   const mine = msg.id ? msg.id === getClientId() : msg.name === getName();
   const row = document.createElement("div");
-  row.className = "message-row" + (mine ? " mine" : "");
+  row.className = "message-row" + (mine ? " mine" : "") + (grouped ? " grouped" : "");
   const time = msg.time ? new Date(msg.time * 1000) : new Date();
   const timeText = time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   row.innerHTML = `
@@ -41,7 +64,7 @@ function buildMessageRow(msg) {
       <div class="quick-react-picker" id="picker-${escapeHtml(msg.msg_id)}">
         ${QUICK_REACTIONS.map(e => `<button class="quick-react-btn" data-emoji="${e}">${e}</button>`).join("")}
       </div>
-      <div class="message-avatar">${escapeHtml(initials(msg.name))}</div>
+      <div class="message-avatar" style="--h:${avatarHue(msg.id)}">${escapeHtml(initials(msg.name))}</div>
       <div class="message-body">
         <div class="meta">${escapeHtml(msg.name)} · ${timeText}</div>
         <div class="bubble ${isAnimatedEmojiOnly(msg.text) ? "emoji-only-bubble" : ""}"></div>
@@ -81,13 +104,19 @@ export function addMessage(msg, scroll = true) {
   const list = $("messages");
   const stick = scroll && (nearBottom() || msg.id === getClientId());
   $("empty").style.display = "none";
-  const row = buildMessageRow(msg);
-  messageRows.set(msg.msg_id, { row, msg, reactions: {} });
+  const grouped = isGrouped(msg);
+  const needsDivider = !lastMessage || dayKey(msg.time) !== dayKey(lastMessage.time);
+  const divider = needsDivider ? buildDayDivider(msg.time) : null;
+  const row = buildMessageRow(msg, grouped);
+  messageRows.set(msg.msg_id, { row, msg, reactions: {}, divider });
+  lastMessage = msg;
+  if (divider) list.appendChild(divider);
   list.appendChild(row);
   applyReactions(msg.msg_id, msg.reactions, false);
   while (messageRows.size > MAX_MESSAGES) {
     const [oldId, old] = messageRows.entries().next().value;
     old.row.remove();
+    old.divider?.remove();
     messageRows.delete(oldId);
   }
   if (stick) list.scrollTop = list.scrollHeight;
@@ -95,8 +124,9 @@ export function addMessage(msg, scroll = true) {
 
 // Full history, received once when joining or reconnecting.
 export function renderMessages(messages) {
-  messageRows.forEach(entry => entry.row.remove());
+  messageRows.forEach(entry => { entry.row.remove(); entry.divider?.remove(); });
   messageRows.clear();
+  lastMessage = null;
   $("empty").style.display = messages?.length ? "none" : "block";
   (messages || []).forEach(msg => addMessage(msg, false));
   $("messages").scrollTop = $("messages").scrollHeight;

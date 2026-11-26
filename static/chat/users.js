@@ -1,5 +1,5 @@
 // "En ligne" list in the sidebar.
-import { $, initials, escapeHtml } from "../util.js";
+import { $, initials, escapeHtml, avatarHue } from "../util.js";
 import { getClientId } from "../session.js";
 
 let users = [];
@@ -20,6 +20,7 @@ export function renderUsers(list, voiceUsers = []) {
   const snapshot = JSON.stringify({ users, voice: Array.from(inVoice) });
   if (snapshot === lastSnapshot) return;
   lastSnapshot = snapshot;
+  renderVoiceMembers(voiceUsers);
 
   const container = $("users");
   container.innerHTML = "";
@@ -31,7 +32,7 @@ export function renderUsers(list, voiceUsers = []) {
     const row = document.createElement("div");
     row.className = "user";
     row.innerHTML = `
-      <div class="avatar">${escapeHtml(initials(user.name))}</div>
+      <div class="avatar${inVoice.has(user.id) ? " in-voice" : ""}" style="--h:${avatarHue(user.id)}">${escapeHtml(initials(user.name))}</div>
       <div class="user-info">
         <div class="user-name">${escapeHtml(user.name)}${user.id === getClientId() ? ' <span class="you-tag">vous</span>' : ""}</div>
         <div class="user-status">
@@ -41,4 +42,14 @@ export function renderUsers(list, voiceUsers = []) {
       </div>`;
     container.appendChild(row);
   }
+}
+
+// Who is in the voice channel, listed under the voice buttons.
+function renderVoiceMembers(voiceUsers) {
+  $("voiceMembers").innerHTML = voiceUsers.map(user => `
+    <div class="voice-member">
+      <span class="avatar" style="--h:${avatarHue(user.id)}">${escapeHtml(initials(user.name))}</span>
+      <span class="voice-member-name">${escapeHtml(user.name)}</span>
+      <span class="voice-member-mic" aria-hidden="true">🎙️</span>
+    </div>`).join("");
 }
