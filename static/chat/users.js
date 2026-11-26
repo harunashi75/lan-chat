@@ -1,6 +1,7 @@
 // "En ligne" list in the sidebar.
 import { $, initials, escapeHtml, avatarHue } from "../util.js";
 import { getClientId } from "../session.js";
+import { isSpeaking, onSpeakingChange } from "../speaking.js";
 
 let users = [];
 let usersById = {};
@@ -8,6 +9,11 @@ let lastSnapshot = "";
 
 export const getUsers = () => users;
 export const userName = id => usersById[id]?.name;
+
+// Draw or remove the speaking ring on every avatar of that person (sidebar list and voice list).
+onSpeakingChange((id, value) => {
+  document.querySelectorAll(`[data-user-id="${CSS.escape(id)}"]`).forEach(el => el.classList.toggle("speaking", value));
+});
 
 export function renderUsers(list, voiceUsers = []) {
   users = list || [];
@@ -32,7 +38,7 @@ export function renderUsers(list, voiceUsers = []) {
     const row = document.createElement("div");
     row.className = "user";
     row.innerHTML = `
-      <div class="avatar${inVoice.has(user.id) ? " in-voice" : ""}" style="--h:${avatarHue(user.id)}">${escapeHtml(initials(user.name))}</div>
+      <div class="avatar${inVoice.has(user.id) ? " in-voice" : ""}${isSpeaking(user.id) ? " speaking" : ""}" data-user-id="${escapeHtml(user.id)}" style="--h:${avatarHue(user.id)}">${escapeHtml(initials(user.name))}</div>
       <div class="user-info">
         <div class="user-name">${escapeHtml(user.name)}${user.id === getClientId() ? ' <span class="you-tag">vous</span>' : ""}</div>
         <div class="user-status">
@@ -48,7 +54,7 @@ export function renderUsers(list, voiceUsers = []) {
 function renderVoiceMembers(voiceUsers) {
   $("voiceMembers").innerHTML = voiceUsers.map(user => `
     <div class="voice-member">
-      <span class="avatar" style="--h:${avatarHue(user.id)}">${escapeHtml(initials(user.name))}</span>
+      <span class="avatar${isSpeaking(user.id) ? " speaking" : ""}" data-user-id="${escapeHtml(user.id)}" style="--h:${avatarHue(user.id)}">${escapeHtml(initials(user.name))}</span>
       <span class="voice-member-name">${escapeHtml(user.name)}</span>
       <span class="voice-member-mic" aria-hidden="true">🎙️</span>
     </div>`).join("");

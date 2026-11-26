@@ -54,6 +54,7 @@ Remarques :
 
 - Barre latérale : salon vocal (rejoindre, partager l'écran, voir les partages), liste des présents et pastille de profil qui ouvre les paramètres. Sur mobile elle devient un menu ouvert par le bouton ☰.
 - Fenêtre **Paramètres** (⚙️, Échap pour fermer) : Profil (nom), Apparence (couleur d'accent bleu/violet/vert/rose, thème clair/sombre/système, emojis animés), Notifications, Partage d'écran (qualité, son), Diagnostic, À propos (lien du salon, confidentialité).
+- Anneau « qui parle » : dans le vocal, un anneau animé aux couleurs de l'accent entoure l'avatar de la personne qui parle (analyse du volume du micro par le navigateur, pour soi-même et pour les autres membres du vocal ; rien ne quitte votre machine). Les autres ne sont analysés que si vous êtes vous-même dans le vocal.
 - « X écrit… » : un indicateur de frappe (au plus un signal toutes les 3 s par personne, rien n'est conservé côté serveur).
 - Notifications : petit son à l'arrivée d'un message quand la fenêtre n'est pas active, sons quand quelqu'un rejoint ou quitte le vocal où vous êtes, et compteur de messages non lus dans le titre de l'onglet et sur son icône. Les sons sont synthétisés par le navigateur (aucun fichier audio), réglables et désactivables.
 

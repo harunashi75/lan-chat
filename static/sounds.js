@@ -1,7 +1,8 @@
 // Short, soft notification sounds synthesised with Web Audio (no audio files to ship).
 let context = null;
 
-function audio() {
+// One shared AudioContext for sounds and voice-activity analysis.
+export function audioContext() {
   context ??= new (window.AudioContext || window.webkitAudioContext)();
   if (context.state === "suspended") context.resume();
   return context;
@@ -19,7 +20,7 @@ const MAX_GAIN = 0.22; // keeps the loudest setting discreet
 export function playSound(name, volume) {
   if (volume <= 0 || !SOUNDS[name]) return;
   try {
-    const ctx = audio();
+    const ctx = audioContext();
     const now = ctx.currentTime;
     for (const [frequency, start, duration] of SOUNDS[name]) {
       const oscillator = ctx.createOscillator();

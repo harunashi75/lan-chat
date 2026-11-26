@@ -5,6 +5,7 @@ import { media, peerConnections } from './state.js';
 import { addOrUpdateScreenTile, removeScreenTile } from './tiles.js';
 import { selectedProfile } from './profiles.js';
 import { syncPresence } from './peers.js';
+import { watchStream, unwatch } from './activity.js';
 
 export async function toggleVoiceChannel() {
   if (!isReady()) { showToast("Attendez la connexion au salon"); return; }
@@ -12,6 +13,7 @@ export async function toggleVoiceChannel() {
     try {
       media.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       media.inVoice = true;
+      watchStream(getClientId(), media.localStream);
       $("voiceToggleBtn").classList.add("active");
       $("voiceBtnText").textContent = "Quitter le vocal";
       showToast("Connecté au canal vocal 🎙️");
@@ -29,6 +31,7 @@ export async function toggleVoiceChannel() {
 
 export async function leaveVoice() {
   media.inVoice = false;
+  unwatch(getClientId());
 
   if (media.localStream) {
     media.localStream.getTracks().forEach(track => track.stop());

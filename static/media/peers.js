@@ -4,6 +4,7 @@ import { send, updatePresence, isReady, getClientId, getRtcConfig } from '../ses
 import { media, peerConnections, peerState, previousStats } from './state.js';
 import { addOrUpdateScreenTile, removeScreenTile } from './tiles.js';
 import { configureVideoSender } from './profiles.js';
+import { watchStream, unwatch } from './activity.js';
 
 export function closePeer(cid) {
   const pc = peerConnections[cid];
@@ -14,6 +15,7 @@ export function closePeer(cid) {
   document.querySelectorAll('#audioContainer audio').forEach(audio => {
     if (audio.dataset.peer === cid) audio.remove();
   });
+  unwatch(cid);
   removeScreenTile(cid);
 }
 
@@ -109,7 +111,8 @@ export function createPeerConnection(cid) {
       stream.addEventListener('removetrack', event => { if (event.track === track) audio.remove(); });
       updateRemoteAudio(cid);
       audio.play().catch(() => showToast('Cliquez dans le salon pour autoriser le son'));
-      track.onended = () => audio.remove();
+      track.onended = () => { audio.remove(); unwatch(cid); };
+      if (audio.dataset.kind === 'microphone') watchStream(cid, new MediaStream([track]));
     }
   };
   return pc;

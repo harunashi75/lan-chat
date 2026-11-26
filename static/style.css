@@ -329,6 +329,13 @@ button:focus-visible,select:focus-visible,summary:focus-visible{outline:2px soli
 .avatar,.message-avatar{--h:215;background:hsl(var(--h) 85% 55% / .16);color:hsl(var(--h) 65% 40%);border:0}
 body.dark-mode .avatar,body.dark-mode .message-avatar{background:hsl(var(--h) 80% 60% / .18);color:hsl(var(--h) 85% 74%)}
 .avatar.in-voice{box-shadow:0 0 0 2px var(--panel-solid),0 0 0 4px var(--purple)}
+/* Speaking ring: follows the accent colour. */
+.avatar.speaking{box-shadow:0 0 0 2px var(--panel-solid),0 0 0 4px var(--blue);animation:speakingPulse 1.2s ease-in-out infinite}
+@keyframes speakingPulse{
+  0%,100%{box-shadow:0 0 0 2px var(--panel-solid),0 0 0 4px var(--blue)}
+  50%{box-shadow:0 0 0 2px var(--panel-solid),0 0 0 7px rgb(var(--accent-rgb) / .45)}
+}
+@media(prefers-reduced-motion:reduce){.avatar.speaking{animation:none}}
 
 /* Consecutive messages from the same person are grouped under one avatar and name. */
 .message-row.grouped{margin-top:-9px}

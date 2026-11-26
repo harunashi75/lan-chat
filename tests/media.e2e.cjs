@@ -127,8 +127,14 @@ try {
   await Promise.all([alice.click('#voiceToggleBtn'),bob.click('#voiceToggleBtn')]);
   await alice.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].filter(a => !a.muted).length===2);
   await bob.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].filter(a => !a.muted).length===2);
+  // Fake microphones emit beeps: both our own and the remote ring must light up, in the accent colour.
+  const aliceId=await alice.evaluate(() => __lanChat.clientId), bobId=await bob.evaluate(() => __lanChat.clientId);
+  await alice.waitForSelector(`#users .avatar.speaking[data-user-id="${aliceId}"]`,{timeout:15000});
+  await alice.waitForSelector(`#users .avatar.speaking[data-user-id="${bobId}"]`,{timeout:15000});
+  assert.match(await alice.evaluate(() => getComputedStyle(document.querySelector('#users .avatar.speaking')).boxShadow),/22, 131, 255/);
   await alice.click('#voiceToggleBtn');
   await alice.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].filter(a => !a.muted).length===1);
+  await alice.waitForFunction(id => !document.querySelector(`#users .avatar.speaking[data-user-id="${id}"]`),aliceId,{timeout:5000});
   await bob.uncheck('#receiveScreens');
   await bob.waitForFunction(() => Object.keys(__lanChat.media.remoteScreenStreams).length===0);
   await alice.waitForFunction(() => Object.values(__lanChat.media.peerConnections).every(pc => !pc.getSenders().some(s => s.track?.kind==='video')));
