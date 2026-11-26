@@ -1,0 +1,19 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><title>Source du partage</title>
+<style>body{font:15px system-ui;background:#18181b;color:#fafafa;padding:20px}#sources{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}button{background:#27272a;color:white;border:1px solid #555;border-radius:12px;padding:12px;cursor:pointer}button:focus,button:hover{outline:2px solid #2589ff}img{width:100%;height:150px;object-fit:contain}span{display:block;overflow-wrap:anywhere}footer{position:sticky;bottom:0;padding:16px;background:#18181b}</style>
+<h2>Choisir un écran ou une fenêtre</h2><p>Seule la source choisie sera partagée.</p><div id="sources"></div>
+<footer><label id="audioLabel" hidden><input type="checkbox" id="audio" checked> Inclure le son système</label> <button id="cancel">Annuler</button></footer>
+<script>
+window.desktop.sources().then(data => {
+  if (!data) return;
+  document.getElementById('audioLabel').hidden = !data.audioAvailable;
+  for (const source of data.sources) {
+    const button=document.createElement('button');
+    const image=document.createElement('img'); image.src=source.thumbnail; image.alt='';
+    const label=document.createElement('span'); label.textContent=source.name;
+    button.append(image,label);
+    button.onclick=() => window.desktop.select({id:source.id,audio:data.audioAvailable && document.getElementById('audio').checked});
+    document.getElementById('sources').append(button);
+  }
+});
+document.getElementById('cancel').onclick=() => window.desktop.select(null);
+</script></html>

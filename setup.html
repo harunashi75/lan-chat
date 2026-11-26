@@ -1,0 +1,15 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><title>LAN Chat</title>
+<style>body{font:15px system-ui;background:#18181b;color:#fafafa;padding:25px}button,input{box-sizing:border-box;width:100%;padding:12px;margin:8px 0;border-radius:10px;border:1px solid #555;background:#27272a;color:white}button{cursor:pointer;background:#086cdb}#error{color:#ff9999}</style>
+<h2>Bienvenue sur LAN Chat</h2><button id="host">Créer un salon sur cet ordinateur</button><p>Ou rejoindre un salon :</p><input id="url" type="url" placeholder="https://… ou http://localhost:8765"><button id="client">Rejoindre</button><p id="error" role="alert"></p>
+<script>
+async function save(role) {
+  document.querySelectorAll('button').forEach(b => b.disabled=true);
+  try {
+    const result=await window.desktop.saveRole({role,url:document.getElementById('url').value.trim()});
+    document.getElementById('error').textContent=result.error || '';
+  } catch(error) { document.getElementById('error').textContent=error.message; }
+  finally { document.querySelectorAll('button').forEach(b => b.disabled=false); }
+}
+document.getElementById('host').onclick=() => save('host');
+document.getElementById('client').onclick=() => save('client');
+</script></html>

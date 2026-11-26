@@ -1,0 +1,22 @@
+{
+  "name": "lan-chat",
+  "version": "1.0.0",
+  "description": "Chat LAN avec partage vidéo WebRTC et signalisation WebSocket",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test:media": "node tests/media.e2e.cjs",
+    "test:server": ".venv/bin/python -m unittest discover -s tests -v",
+    "install:desktop": "install-electron",
+    "start:wayland": "electron . --disable-features=WaylandWpColorManagerV1"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "dependencies": {
+    "electron-store": "^11.0.2"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "playwright": "^1.65.0"
+  }
+}
