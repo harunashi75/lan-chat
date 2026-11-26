@@ -76,7 +76,7 @@ Chaque navigateur ouvre une session avec un jeton secret (jamais diffusé) : le 
 
 ## Préparer un futur rendu vidéo / SFU
 
-- `media.js` contient la capture, les profils, les émetteurs, la négociation, les sorties audio/vidéo et les diagnostics, séparés du chat.
+- `static/media.js` contient la capture, les profils, les émetteurs, la négociation, les sorties audio/vidéo et les diagnostics, séparés du chat. Il ne parle jamais au socket directement : `static/session.js` porte l'identité, le WebSocket et la présence (événements `on(...)`, `send`, `updatePresence`), `static/app.js` le chat et l'interface, `static/emoji.js` et `static/util.js` les utilitaires, `static/style.css` le style. Ce sont des modules ES sans variables globales partagées ; `window.__lanChat` n'expose qu'un accès en lecture pour le test navigateur.
 - `addOrUpdateScreenTile` est le point de rendu des flux reçus. Un futur lecteur peut le remplacer sans changer la signalisation du chat.
 - `syncPeerTracks`, `createPeerConnection` et `handleWebRTCSignals` constituent le chemin actuel de transport média en maillage.
 - `/config` centralise ICE et budget, et annonce explicitement `mediaTopology: "mesh"`.

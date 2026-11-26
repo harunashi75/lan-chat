@@ -51,25 +51,33 @@ async function participant(name) {
   page.on('console',msg => {if(msg.type()==='error') errors.push(msg.text());});
   await page.goto(base);
   await page.fill('#nameInput',name);await page.click('#joinButton');
-  await page.waitForFunction(() => transportReady && latestUsers.length>0);
+  await page.waitForFunction(() => __lanChat.ready && __lanChat.users.length>0);
   return page;
 }
 async function remoteVideo(page, expected=1) {
   await page.waitForFunction(count => [...document.querySelectorAll('.screen-tile video')].filter(v =>
-    !v.id.endsWith(clientId) && v.readyState>=2 && v.videoWidth>0).length === count, expected,{timeout:15000});
+    !v.id.endsWith(__lanChat.clientId) && v.readyState>=2 && v.videoWidth>0).length === count, expected,{timeout:15000});
 }
 (async () => {
 try {
   await waitServer();
   browser=await chromium.launch({headless:true,args:['--disable-features=WebRtcHideLocalIpsWithMdns','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
   const alice=await participant('Alice');const bob=await participant('Bob');
-  await alice.waitForFunction(() => latestUsers.length===2);
+  await alice.waitForFunction(() => __lanChat.users.length===2);
   await alice.fill('#messageInput','Bonjour WebSocket');await alice.click('#sendButton');
   await bob.waitForFunction(() => document.getElementById('messages').textContent.includes('Bonjour WebSocket'));
+  // Reaction by id, visible for the other participant.
+  await bob.locator('.message-row').first().locator('.react-btn-trigger').click();
+  await bob.locator('.quick-react-btn').first().click();
+  await alice.waitForSelector('.reaction-badge.active', {state:'attached', timeout:3000}).then(() => {throw new Error('Alice must not see her own active badge');}, () => {});
+  await alice.waitForFunction(() => document.querySelector('.reaction-badge')?.textContent.includes('1'));
+  // Renaming propagates to everyone.
+  await bob.click('#settingsToggle');await bob.fill('#renameInput','Robert');await bob.click('#renameButton');
+  await alice.waitForFunction(() => document.getElementById('users').textContent.includes('Robert'));
   await alice.check('#shareAudio');await alice.click('#screenShareBtn');await remoteVideo(bob);
   await bob.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].some(a => a.dataset.kind==='screen' && !a.muted));
   await alice.selectOption('#videoProfile','motion');
-  assert.equal(await alice.evaluate(() => screenVideoTrack.contentHint),'motion');
+  assert.equal(await alice.evaluate(() => __lanChat.media.screenVideoTrack.contentHint),'motion');
   await bob.check('#shareAudio');await bob.click('#screenShareBtn');await remoteVideo(alice);
   await Promise.all([alice.click('#voiceToggleBtn'),bob.click('#voiceToggleBtn')]);
   await alice.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].filter(a => !a.muted).length===2);
@@ -77,22 +85,22 @@ try {
   await alice.click('#voiceToggleBtn');
   await alice.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].filter(a => !a.muted).length===1);
   await bob.uncheck('#receiveScreens');
-  await bob.waitForFunction(() => Object.keys(remoteScreenStreams).length===0);
-  await alice.waitForFunction(() => Object.values(peerConnections).every(pc => !pc.getSenders().some(s => s.track?.kind==='video')));
+  await bob.waitForFunction(() => Object.keys(__lanChat.media.remoteScreenStreams).length===0);
+  await alice.waitForFunction(() => Object.values(__lanChat.media.peerConnections).every(pc => !pc.getSenders().some(s => s.track?.kind==='video')));
   await bob.check('#receiveScreens');await remoteVideo(bob);
   await alice.click('#screenShareBtn');
-  await bob.waitForFunction(() => Object.keys(remoteScreenStreams).length===0);
+  await bob.waitForFunction(() => Object.keys(__lanChat.media.remoteScreenStreams).length===0);
   await alice.click('#screenShareBtn');await remoteVideo(bob);
   await bob.waitForFunction(() => document.getElementById('mediaStats').textContent.includes('Réception'));
   // Capture the updated interface for visual inspection, with diagnostics expanded.
   await bob.locator('details.media-setting summary').click();
   await bob.screenshot({path:process.env.LAN_CHAT_SCREENSHOT || '/tmp/lan-chat-preview.png'});
   // Simulate a transient signaling drop; active capture must reconnect automatically.
-  await bob.evaluate(() => signalSocket.close());
-  await bob.waitForFunction(() => transportReady && latestUsers.length===2);
+  await bob.evaluate(() => __lanChat.socket.close());
+  await bob.waitForFunction(() => __lanChat.ready && __lanChat.users.length===2);
   await remoteVideo(bob);await remoteVideo(alice);
   await bob.close();
-  await alice.waitForFunction(() => latestUsers.length===1 && Object.keys(peerConnections).length===0);
+  await alice.waitForFunction(() => __lanChat.users.length===1 && Object.keys(__lanChat.media.peerConnections).length===0);
   // Late joiner receives an already active screen without joining voice.
   const charlie=await participant('Charlie');await remoteVideo(charlie);
   await charlie.close();
@@ -102,8 +110,8 @@ try {
 } catch(error) {
   for (const page of pages.filter(p => !p.isClosed())) {
     console.error(JSON.stringify(await page.evaluate(() => ({
-      users:latestUsers,
-      peers:Object.fromEntries(Object.entries(peerConnections).map(([id,p]) => [id,{connection:p.connectionState,signaling:p.signalingState,ice:p.iceConnectionState,gathering:p.iceGatheringState,senders:p.getSenders().map(s=>s.track?.kind)}])),
+      users:__lanChat.users,
+      peers:Object.fromEntries(Object.entries(__lanChat.media.peerConnections).map(([id,p]) => [id,{connection:p.connectionState,signaling:p.signalingState,ice:p.iceConnectionState,gathering:p.iceGatheringState,senders:p.getSenders().map(s=>s.track?.kind)}])),
       audio:[...document.querySelectorAll('audio')].map(a=>({id:a.id,kind:a.dataset.kind,muted:a.muted})),
       stats:document.getElementById('mediaStats').textContent
     })).catch(()=>({})),null,2));

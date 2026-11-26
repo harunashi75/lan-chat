@@ -1,23 +1,23 @@
-// --- 2. WEBRTC (VOCAL) VARIABLES ---
+// Voice and screen sharing over WebRTC (mesh). Signaling goes through session.js.
+import { $, showToast } from './util.js';
+import { on, send, close, updatePresence, getClientId, getName, isReady,
+         getRtcConfig, getVideoBudget } from './session.js';
+
+// --- WEBRTC (VOCAL) VARIABLES ---
 let inVoice = false;
 let localStream = null;
 let peerConnections = {}; // { targetClientId: RTCPeerConnection }
 let screenStream = null;
 let screenVideoTrack = null;
-let remoteScreenStreams = {}; // { clientId: MediaStream }
+let remoteScreenStreams = {}; // { getClientId(): MediaStream }
 let latestUsersById = {};      // noms affichés pour les partages
 let expandedScreenId = null;
-let rtcConfig = { iceServers: [] };
 const VIDEO_PROFILES = {
   text: { width:1920, height:1080, fps:20, bitrate:6000000, hint:'text', degradation:'maintain-resolution' },
   balanced: { width:1920, height:1080, fps:30, bitrate:10000000, hint:'detail', degradation:'balanced' },
   motion: { width:1920, height:1080, fps:60, bitrate:16000000, hint:'motion', degradation:'maintain-framerate' },
   detail: { width:2560, height:1440, fps:30, bitrate:16000000, hint:'detail', degradation:'maintain-resolution' }
 };
-let signalSocket = null;
-let reconnectTimer = null;
-let reconnectDelay = 500;
-let transportReady = false;
 let peerState = {};
 let latestUsers = [];
 let previousStats = new Map();
@@ -25,82 +25,14 @@ let diagnosticsRunning = false;
 let screenStarting = false;
 const selectedProfile = () => VIDEO_PROFILES[$('videoProfile').value];
 
-function updatePresence() {
-  if (signalSocket?.readyState === WebSocket.OPEN) {
-    signalSocket.send(JSON.stringify({ type:'presence', name:username, in_voice:inVoice,
-      sharing_screen:!!screenStream, receive_screens:$('receiveScreens').checked }));
-  }
-}
-
-async function connectSignaling() {
-  try {
-    const response = await fetch('/config', { headers: { 'X-Room-Password': roomPassword } });
-    if (!response.ok) throw new Error('Configuration indisponible');
-    const config = await response.json();
-    rtcConfig = { iceServers: config.iceServers || [] };
-    window.lanVideoBudget = config.videoBudget || 40000000;
-    const url = new URL('/ws', location.href);
-    url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    url.searchParams.set('client', clientId);
-    url.searchParams.set('token', sessionToken);
-    if (roomPassword) url.searchParams.set('password', roomPassword);
-    const ws = new WebSocket(url);
-    signalSocket = ws;
-    let incoming = Promise.resolve();
-    ws.onopen = () => {
-      reconnectDelay = 500;
-      transportReady = true;
-      updatePresence();
-    };
-    ws.onmessage = event => {
-      incoming = incoming.then(async () => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'signal') await handleWebRTCSignals([data]);
-        else if (data.type === 'state' || data.type === 'users') await applyState(data);
-        else if (data.type === 'message') addMessage(data.message);
-        else if (data.type === 'reactions') applyReactions(data.msg_id, data.reactions, true);
-        else if (data.type === 'error') showToast(data.error);
-      }).catch(err => console.error('Signalisation', err));
-    };
-    ws.onclose = event => {
-      if (event.code === 4004 && signalSocket === ws) {
-        signalSocket = null;
-        transportReady = false;
-        connectionEl.textContent = 'Mot de passe requis';
-        requirePassword();
-        return;
-      }
-      if ((event.code === 4001 || event.code === 4003) && signalSocket === ws) {
-        // Identity taken over by another tab, or token rejected: start a fresh identity.
-        clientId = crypto.randomUUID();
-        sessionToken = crypto.randomUUID();
-        sessionStorage.setItem('lan_chat_client_id',clientId);
-        sessionStorage.setItem('lan_chat_token',sessionToken);
-      }
-      if (signalSocket !== ws) return;
-      transportReady = false;
-      connectionEl.textContent = 'Reconnexion…';
-      Object.keys(peerConnections).forEach(closePeer);
-      reconnectTimer = setTimeout(connectSignaling, reconnectDelay);
-      reconnectDelay = Math.min(reconnectDelay * 2, 10000);
-    };
-    ws.onerror = () => ws.close();
-  } catch (err) {
-    console.error(err);
-    connectionEl.textContent = 'Serveur indisponible · reconnexion…';
-    reconnectTimer = setTimeout(connectSignaling, reconnectDelay);
-    reconnectDelay = Math.min(reconnectDelay * 2, 10000);
-  }
-}
-
 async function configureVideoSender(sender) {
   if (sender.track?.kind !== 'video') return;
   const profile = selectedProfile();
   const params = sender.getParameters();
   if (!params.encodings?.length) return;
-  const viewers = Math.max(1, latestUsers.filter(u => u.id !== clientId && u.receive_screens).length);
+  const viewers = Math.max(1, latestUsers.filter(u => u.id !== getClientId() && u.receive_screens).length);
   // Budget global configurable, partagé entre les spectateurs en mode pair à pair.
-  const totalBudget = Number(window.lanVideoBudget || 40000000);
+  const totalBudget = Number(getVideoBudget());
   params.encodings.forEach(encoding => {
     encoding.maxBitrate = Math.min(profile.bitrate, Math.floor(totalBudget / viewers));
     encoding.maxFramerate = profile.fps;
@@ -120,8 +52,6 @@ async function changeVideoProfile() {
     await Promise.all(Object.values(peerConnections).flatMap(pc => pc.getSenders().map(configureVideoSender)));
   } catch (error) { console.error(error); showToast('Ce profil ne peut pas être appliqué sur cette source'); }
 }
-const savedVideoProfile = localStorage.getItem('lan_video_profile');
-if (VIDEO_PROFILES[savedVideoProfile]) $('videoProfile').value = savedVideoProfile;
 
 function closePeer(cid) {
   const pc = peerConnections[cid];
@@ -206,7 +136,7 @@ async function collectDiagnostics() {
     }
     if (screenVideoTrack) {
       const settings = screenVideoTrack.getSettings();
-      const badge = document.getElementById(`screen-quality-${clientId}`);
+      const badge = document.getElementById(`screen-quality-${getClientId()}`);
       if (badge) badge.textContent = `Aperçu local · ${settings.width || '—'} × ${settings.height || '—'}`;
     }
   } catch (error) { console.warn('Diagnostic indisponible', error); }
@@ -222,7 +152,7 @@ document.addEventListener('click', () => {
 
 // --- 6. VOCAL + PARTAGE D'ÉCRAN (WEBRTC INDÉPENDANTS) ---
 async function toggleVoiceChannel() {
-  if (!transportReady) { showToast("Attendez la connexion au salon"); return; }
+  if (!isReady()) { showToast("Attendez la connexion au salon"); return; }
   if (!inVoice) {
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -233,13 +163,13 @@ async function toggleVoiceChannel() {
 
     } catch (err) {
       console.error("Erreur microphone :", err);
-      alert("Impossible d'accéder au microphone.\n\nErreur : " + err.name + "\n" + err.message);
+      showToast("Impossible d'accéder au microphone (" + err.name + ")");
       return;
     }
   } else {
     await leaveVoice();
   }
-  getState();
+  syncPresence();
 }
 
 async function leaveVoice() {
@@ -254,7 +184,7 @@ async function leaveVoice() {
   $("voiceToggleBtn").classList.remove("active");
   $("voiceBtnText").textContent = "Rejoindre le vocal";
   showToast("Déconnecté du vocal");
-  getState();
+  syncPresence();
 }
 
 async function toggleScreenShare() {
@@ -264,7 +194,7 @@ async function toggleScreenShare() {
   }
 
   if (screenStarting) return;
-  if (!transportReady) { showToast('Attendez la connexion au salon'); return; }
+  if (!isReady()) { showToast('Attendez la connexion au salon'); return; }
   if (!navigator.mediaDevices?.getDisplayMedia) {
     showToast('Le partage nécessite HTTPS ou localhost et un navigateur compatible'); return;
   }
@@ -286,11 +216,11 @@ async function toggleScreenShare() {
     $("screenShareBtn").classList.add("active");
     $("screenShareBtnText").textContent = "Arrêter le partage";
 
-    addOrUpdateScreenTile(clientId, screenStream, `${username} · Vous`, true);
+    addOrUpdateScreenTile(getClientId(), screenStream, `${getName()} · Vous`, true);
     screenVideoTrack.onended = () => stopScreenShare();
 
     // getState() annoncera immédiatement que nous partageons.
-    await getState();
+    syncPresence();
     showToast("Partage d'écran démarré 🖥️");
   } catch (err) {
     console.error("Erreur partage d'écran :", err);
@@ -317,7 +247,7 @@ async function stopScreenShare() {
 
   $("screenShareBtn").classList.remove("active");
   $("screenShareBtnText").textContent = "Partager l'écran";
-  removeScreenTile(clientId);
+  removeScreenTile(getClientId());
 
   $('shareAudio').disabled = false;
   for (const pc of Object.values(peerConnections)) {
@@ -326,7 +256,7 @@ async function stopScreenShare() {
     }
   }
 
-  await getState();
+  syncPresence();
   showToast("Partage d'écran arrêté");
 }
 
@@ -344,8 +274,8 @@ function addOrUpdateScreenTile(cid, stream, label, isLocal = false) {
       <div class="screen-tile-header">
         <div class="screen-label" id="screen-label-${cid}"></div>
         <div class="screen-actions">
-          <button class="screen-action" type="button" title="Agrandir" onclick="toggleExpandScreen('${cid}')">⤢</button>
-          <button class="screen-action" type="button" title="Plein écran" onclick="fullscreenScreen('${cid}')">⛶</button>
+          <button class="screen-action" type="button" title="Agrandir" data-action="expand">⤢</button>
+          <button class="screen-action" type="button" title="Plein écran" data-action="fullscreen">⛶</button>
         </div>
       </div>
     `;
@@ -430,7 +360,7 @@ document.addEventListener("keydown", event => {
 
 async function renegotiatePeer(targetCid, pc) {
   const state = peerState[targetCid];
-  if (!state || state.makingOffer || pc.signalingState !== 'stable' || !transportReady) return;
+  if (!state || state.makingOffer || pc.signalingState !== 'stable' || !isReady()) return;
   try {
     state.makingOffer = true;
     await pc.setLocalDescription();
@@ -471,9 +401,9 @@ async function handleWebRTCSignals(signals) {
 }
 
 function createPeerConnection(cid) {
-  const pc = new RTCPeerConnection(rtcConfig);
+  const pc = new RTCPeerConnection(getRtcConfig());
   peerConnections[cid] = pc;
-  peerState[cid] = { polite:clientId > cid, makingOffer:false, settingAnswer:false, ignoreOffer:false, candidates:[] };
+  peerState[cid] = { polite:getClientId() > cid, makingOffer:false, settingAnswer:false, ignoreOffer:false, candidates:[] };
   pc.onnegotiationneeded = () => renegotiatePeer(cid, pc);
   pc.onicecandidate = ({candidate}) => {
     if (candidate) sendSignal(cid, {candidate}).catch(console.error);
@@ -509,9 +439,8 @@ function createPeerConnection(cid) {
 }
 
 async function sendSignal(target, signal) {
-  if (signalSocket?.readyState !== WebSocket.OPEN) throw new Error('Signalisation déconnectée');
   if (signal.sdp) signal.media = {microphone:localStream?.id, screen:screenStream?.id};
-  signalSocket.send(JSON.stringify({type:'signal',target,signal}));
+  if (!send({type:'signal',target,signal})) throw new Error('Signalisation déconnectée');
 }
 
 function updateRemoteAudio(cid) {
@@ -524,20 +453,17 @@ function updateRemoteAudio(cid) {
   });
 }
 
-async function getState() {
+function syncPresence() {
   Object.keys(peerConnections).forEach(updateRemoteAudio);
-  updatePresence();
+  updatePresence({ in_voice:inVoice, sharing_screen:!!screenStream, receive_screens:$('receiveScreens').checked });
 }
 
 async function applyState(data) {
-  connectionEl.textContent = 'Connecté';
   latestUsers = data.users || [];
   latestUsersById = Object.fromEntries(latestUsers.map(u => [u.id,u]));
-  renderUsers(latestUsers, data.voice_users || []);
-  if (data.messages) renderMessages(data.messages);
   const needed = new Set();
   for (const user of latestUsers) {
-    if (user.id === clientId) continue;
+    if (user.id === getClientId()) continue;
     if ((inVoice && user.in_voice) || (screenStream && user.receive_screens) || (user.sharing_screen && $('receiveScreens').checked)) {
       needed.add(user.id);
       const pc = peerConnections[user.id] || createPeerConnection(user.id);
@@ -556,11 +482,42 @@ async function applyState(data) {
 }
 
 
-window.addEventListener('beforeunload', () => {
-  clearTimeout(reconnectTimer);
-  if (signalSocket) { signalSocket.onclose = null; signalSocket.close(); }
+function cleanup() {
   Object.values(peerConnections).forEach(pc => pc.close());
   screenStream?.getTracks().forEach(track => track.stop());
   localStream?.getTracks().forEach(track => track.stop());
-});
+}
 
+export function mediaDebug() {
+  return { peerConnections, remoteScreenStreams, screenVideoTrack };
+}
+
+export function initMedia() {
+  on('signal', data => handleWebRTCSignals([data]));
+  const onState = async data => {
+    latestUsers = data.users || [];
+    latestUsersById = Object.fromEntries(latestUsers.map(u => [u.id,u]));
+    await applyState(data);
+  };
+  on('state', onState);
+  on('users', onState);
+  on('disconnect', () => Object.keys(peerConnections).forEach(closePeer));
+
+  $('voiceToggleBtn').addEventListener('click', toggleVoiceChannel);
+  $('screenShareBtn').addEventListener('click', toggleScreenShare);
+  $('videoProfile').addEventListener('change', changeVideoProfile);
+  $('receiveScreens').addEventListener('change', syncPresence);
+  $('screenBackdrop').addEventListener('click', closeExpandedScreen);
+  $('screenGrid').addEventListener('click', event => {
+    const button = event.target.closest('[data-action]');
+    const tile = button?.closest('.screen-tile');
+    if (!tile) return;
+    const cid = tile.id.slice('screen-tile-'.length);
+    if (button.dataset.action === 'expand') toggleExpandScreen(cid);
+    else if (button.dataset.action === 'fullscreen') fullscreenScreen(cid);
+  });
+  const savedProfile = localStorage.getItem('lan_video_profile');
+  if (VIDEO_PROFILES[savedProfile]) $('videoProfile').value = savedProfile;
+  updatePresence({ receive_screens:$('receiveScreens').checked });
+  window.addEventListener('beforeunload', () => { close(); cleanup(); });
+}

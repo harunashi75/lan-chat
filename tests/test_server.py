@@ -140,7 +140,7 @@ class SignalingTests(AioHTTPTestCase):
 
 
     async def test_config_assets_and_presence_changes(self):
-        for route in ('/', '/media.js', '/config'):
+        for route in ('/', '/static/app.js', '/static/media.js', '/static/session.js', '/static/style.css', '/config'):
             response = await self.client.get(route)
             self.assertEqual(response.status, 200)
         alice = await self.connect('alice', in_voice=True)

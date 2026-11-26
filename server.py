@@ -78,10 +78,6 @@ async def index(request):
                         content_type='text/html', headers={'Cache-Control': 'no-store'})
 
 
-async def media_script(request):
-    return web.FileResponse(BASE_DIR / 'media.js', headers={'Cache-Control': 'no-store'})
-
-
 def password_ok(app, supplied):
     expected = app[PASSWORD_KEY]
     return not expected or hmac.compare_digest(expected.encode(), supplied.encode())
@@ -227,6 +223,12 @@ async def cleanup(app):
     await asyncio.gather(*(ws.close(code=1001, message=b'Server shutdown') for ws in list(app[ROOM_KEY].sockets.values())))
 
 
+async def no_store_static(request, response):
+    """Always serve the latest front-end files after an update."""
+    if request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'no-store'
+
+
 def create_app():
     app = web.Application(client_max_size=131072)
     app[ROOM_KEY] = Room()
@@ -235,7 +237,8 @@ def create_app():
     app[ORIGINS_KEY] = {value.strip().rstrip('/') for value in os.environ.get('LAN_CHAT_PUBLIC_ORIGINS', '').split(',') if value.strip()}
     app.router.add_get('/', index)
     app.router.add_get('/config', config)
-    app.router.add_get('/media.js', media_script)
+    app.router.add_static('/static', BASE_DIR / 'static')
+    app.on_response_prepare.append(no_store_static)
     app.router.add_get('/ws', websocket)
     app.on_shutdown.append(cleanup)
     return app
