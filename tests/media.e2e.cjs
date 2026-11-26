@@ -94,7 +94,7 @@ try {
   await alice.waitForFunction(() => document.getElementById('users').textContent.includes('Robert'));
   await settings(alice,'media',() => alice.check('#shareAudio'));await alice.click('#screenShareBtn');await remoteVideo(bob);
   await bob.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].some(a => a.dataset.kind==='screen' && !a.muted));
-  await settings(alice,'media',() => alice.selectOption('#videoProfile','motion'));
+  await settings(alice,'media',() => alice.click('.profile-card[data-profile="motion"]'));
   assert.equal(await alice.evaluate(() => __lanChat.media.screenVideoTrack.contentHint),'motion');
   await settings(bob,'media',() => bob.check('#shareAudio'));await bob.click('#screenShareBtn');await remoteVideo(alice);
   await Promise.all([alice.click('#voiceToggleBtn'),bob.click('#voiceToggleBtn')]);

@@ -1,15 +1,71 @@
-<!doctype html><html lang="fr"><meta charset="utf-8"><title>LAN Chat</title>
-<style>body{font:15px system-ui;background:#18181b;color:#fafafa;padding:25px}button,input{box-sizing:border-box;width:100%;padding:12px;margin:8px 0;border-radius:10px;border:1px solid #555;background:#27272a;color:white}button{cursor:pointer;background:#086cdb}#error{color:#ff9999}</style>
-<h2>Bienvenue sur LAN Chat</h2><button id="host">Créer un salon sur cet ordinateur</button><p>Ou rejoindre un salon :</p><input id="url" type="url" placeholder="https://… ou http://localhost:8765"><button id="client">Rejoindre</button><p id="error" role="alert"></p>
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LAN Chat</title>
+<link rel="stylesheet" href="static/base.css">
+<style>
+  html,body{height:100%}
+  body{display:grid;place-items:center;overflow:auto;padding:24px;
+    background:radial-gradient(1200px 600px at 20% -10%,var(--blue-soft),transparent),
+               radial-gradient(900px 500px at 110% 110%,var(--purple-soft),transparent),var(--bg)}
+  .card{width:min(440px,100%);padding:30px;border-radius:30px;background:var(--modal-bg);border:1px solid var(--border);box-shadow:var(--shadow)}
+  .logo{display:block;width:64px;height:64px;border-radius:19px;box-shadow:0 10px 26px rgba(22,131,255,.25)}
+  h1{margin:16px 0 6px;font-size:25px;letter-spacing:-.7px}
+  .lead{margin:0 0 22px;color:var(--muted);font-size:13px;line-height:1.5}
+  .choice{display:flex;align-items:center;gap:14px;width:100%;padding:16px;border-radius:20px;text-align:left;
+    background:var(--hover-bg);border:1px solid var(--border);color:var(--text);transition:.18s}
+  .choice:hover:not(:disabled){border-color:var(--blue);background:var(--blue-soft)}
+  .choice-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:15px;background:var(--blue-soft);font-size:22px;flex:none}
+  .choice strong{display:block;font-size:14px}
+  .choice small{display:block;margin-top:3px;color:var(--muted);font-size:12px;line-height:1.4}
+  .divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase}
+  .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border)}
+  label{display:block;margin-bottom:8px;font-size:12px;font-weight:650}
+  .row{display:flex;gap:8px}
+  #error{min-height:18px;margin:12px 2px 0;color:#ff453a;font-size:12px}
+  button:disabled{opacity:.5;cursor:default}
+</style>
+</head>
+<body>
+<main class="card">
+  <img class="logo" src="static/icon.svg" alt="">
+  <h1>Bienvenue sur LAN Chat</h1>
+  <p class="lead">Discute, parle et partage ton écran avec tes amis sur le même réseau.</p>
+
+  <button class="choice" id="host" type="button">
+    <span class="choice-icon" aria-hidden="true">🏠</span>
+    <span><strong>Créer un salon</strong><small>Sur cet ordinateur. Tes amis te rejoignent avec ton adresse.</small></span>
+  </button>
+
+  <div class="divider">ou</div>
+
+  <label for="url">Rejoindre un salon</label>
+  <div class="row">
+    <input class="field-input" id="url" type="url" placeholder="https://… ou http://192.168.…:8765">
+    <button class="btn-primary" id="client" type="button">Rejoindre</button>
+  </div>
+  <p id="error" role="alert"></p>
+</main>
 <script>
+document.body.classList.toggle('dark-mode', matchMedia('(prefers-color-scheme: dark)').matches);
+
 async function save(role) {
-  document.querySelectorAll('button').forEach(b => b.disabled=true);
+  const buttons = document.querySelectorAll('button');
+  buttons.forEach(b => b.disabled = true);
   try {
-    const result=await window.desktop.saveRole({role,url:document.getElementById('url').value.trim()});
-    document.getElementById('error').textContent=result.error || '';
-  } catch(error) { document.getElementById('error').textContent=error.message; }
-  finally { document.querySelectorAll('button').forEach(b => b.disabled=false); }
+    const result = await window.desktop.saveRole({ role, url: document.getElementById('url').value.trim() });
+    document.getElementById('error').textContent = result.error || '';
+  } catch (error) {
+    document.getElementById('error').textContent = error.message;
+  } finally {
+    buttons.forEach(b => b.disabled = false);
+  }
 }
-document.getElementById('host').onclick=() => save('host');
-document.getElementById('client').onclick=() => save('client');
-</script></html>
+document.getElementById('host').onclick = () => save('host');
+document.getElementById('client').onclick = () => save('client');
+document.getElementById('url').addEventListener('keydown', event => { if (event.key === 'Enter') save('client'); });
+</script>
+</body>
+</html>

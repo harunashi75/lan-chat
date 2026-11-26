@@ -54,7 +54,7 @@ async function createMainWindow() {
 
 function createSetupWindow() {
   const win = new BrowserWindow({
-    width: 500, height: 440, title: 'Configuration · LAN Chat', icon: APP_ICON, autoHideMenuBar: true,
+    width: 520, height: 620, title: 'Configuration · LAN Chat', icon: APP_ICON, autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'desktop-preload.js'), ...SECURE_WEB_PREFERENCES }
   });
   win.loadFile('setup.html');

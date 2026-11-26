@@ -29,8 +29,27 @@ function showTab(tab) {
   });
 }
 
+// The quality cards mirror the hidden <select id="videoProfile">, which media/ reads and listens to.
+function syncProfileCards() {
+  const current = $("videoProfile").value;
+  document.querySelectorAll(".profile-card").forEach(card => {
+    card.setAttribute("aria-checked", String(card.dataset.profile === current));
+  });
+}
+
+function initProfileCards() {
+  document.querySelectorAll(".profile-card").forEach(card => {
+    card.addEventListener("click", () => {
+      $("videoProfile").value = card.dataset.profile;
+      $("videoProfile").dispatchEvent(new Event("change"));
+      syncProfileCards();
+    });
+  });
+}
+
 export function openSettings(tab = lastTab) {
   lastFocus = document.activeElement;
+  syncProfileCards();
   showTab(tab);
   $("renameInput").value = getName();
   $("inviteLink").value = location.origin;
@@ -101,6 +120,7 @@ export function initSettings({ isJoined, animatedEmoji, onAnimatedEmoji }) {
   $("renameButton").addEventListener("click", () => renameSelf(isJoined));
   $("renameInput").addEventListener("keydown", event => { if (event.key === "Enter") renameSelf(isJoined); });
   $("copyInvite").addEventListener("click", copyInvite);
+  initProfileCards();
 
   const animated = $("animatedEmoji");
   animated.checked = animatedEmoji;

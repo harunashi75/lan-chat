@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LAN Chat</title>
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/base.css">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -156,14 +157,18 @@
         <p class="settings-lead">Réglages appliqués quand vous partagez votre écran.</p>
         <div class="settings-group">
           <div class="media-setting">
-            <label class="media-heading" for="videoProfile">Qualité du partage <span class="media-tag">VIDÉO</span></label>
-            <div class="profile-select">
-              <select id="videoProfile">
-                <option value="text">Texte net · 1080p / 20 ips</option>
-                <option value="balanced" selected>Équilibré · 1080p / 30 ips</option>
-                <option value="motion">Mouvement · 1080p / 60 ips</option>
-                <option value="detail">Haute définition · 1440p / 30 ips</option>
-              </select>
+            <div class="media-heading" id="profileLabel">Qualité du partage <span class="media-tag">VIDÉO</span></div>
+            <select id="videoProfile" hidden>
+              <option value="text">Texte net · 1080p / 20 ips</option>
+              <option value="balanced" selected>Équilibré · 1080p / 30 ips</option>
+              <option value="motion">Mouvement · 1080p / 60 ips</option>
+              <option value="detail">Haute définition · 1440p / 30 ips</option>
+            </select>
+            <div class="profile-grid" id="profileGrid" role="radiogroup" aria-labelledby="profileLabel">
+              <button type="button" class="profile-card" role="radio" data-profile="text"><span class="profile-icon" aria-hidden="true">🔤</span><strong>Texte net</strong><small>1080p · 20 ips<br>Code, documents</small></button>
+              <button type="button" class="profile-card" role="radio" data-profile="balanced"><span class="profile-icon" aria-hidden="true">⚖️</span><strong>Équilibré</strong><small>1080p · 30 ips<br>Usage général</small></button>
+              <button type="button" class="profile-card" role="radio" data-profile="motion"><span class="profile-icon" aria-hidden="true">🎮</span><strong>Mouvement</strong><small>1080p · 60 ips<br>Jeux, vidéos</small></button>
+              <button type="button" class="profile-card" role="radio" data-profile="detail"><span class="profile-icon" aria-hidden="true">🖼️</span><strong>Haute définition</strong><small>1440p · 30 ips<br>Détails fins</small></button>
             </div>
             <p class="media-help">Objectif d'envoi, selon la source et le réseau. Votre aperçu est local. Modifiable pendant le partage.</p>
           </div>

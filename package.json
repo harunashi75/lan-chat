@@ -52,7 +52,9 @@
       "setup.html",
       "capture-picker.html",
       "package.json",
-      "assets/icon.png"
+      "assets/icon.png",
+      "static/base.css",
+      "static/icon.svg"
     ],
     "extraResources": [
       {
