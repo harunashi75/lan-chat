@@ -71,7 +71,7 @@ export LAN_CHAT_ICE_SERVERS='[{"urls":"stun:stun.example.net:3478"},{"urls":["tu
 
 Le serveur STUN Google conserve la découverte publique déjà utilisée par le projet. Pour un LAN sans service externe, définir `LAN_CHAT_ICE_SERVERS='[]'`. Certains réseaux nécessitent TURN. Pinggy transporte le site et la signalisation, pas les flux média WebRTC. La configuration `/config` est destinée aux navigateurs : les identifiants TURN qui y figurent sont donc visibles. Utiliser des identifiants temporaires pour une installation publique. Aucun service TURN n'est provisionné automatiquement.
 
-Le salon n'a pas de comptes ni de mot de passe. Le lien donne accès au salon ; l'application reste destinée à un groupe de confiance.
+Chaque navigateur ouvre une session avec un jeton secret (jamais diffusé) : le chat, les réactions et les signaux passent par le WebSocket et sont attribués à l'identité authentifiée de la connexion, ce qui empêche d'écrire au nom d'un autre. Le jeton permet aussi de reprendre sa session après une coupure réseau. Le salon n'a pas de comptes ni de mot de passe. Le lien donne accès au salon ; l'application reste destinée à un groupe de confiance.
 
 ## Préparer un futur rendu vidéo / SFU
 
@@ -92,7 +92,7 @@ npm run test:media
 
 Sous Windows, utiliser `.venv\Scripts\python.exe` pour les tests Python.
 
-Les tests serveur vérifient présence, routage des signaux, chat, réactions, départs, identités dupliquées et origines. Le test navigateur utilise deux puis trois clients avec de vrais échanges WebRTC, une capture canvas et du son synthétiques : réception vidéo, partage bidirectionnel, changement de profil, vocal, isolation audio, désabonnement, arrêt/reprise, reconnexion et arrivée tardive. L'option désactivant mDNS est limitée au navigateur de test pour les environnements sans résolution multicast.
+Les tests serveur vérifient présence, routage des signaux, chat et réactions par WebSocket, départs, protection des identités par jeton, reprise de session et origines. Le test navigateur utilise deux puis trois clients avec de vrais échanges WebRTC, une capture canvas et du son synthétiques : réception vidéo, partage bidirectionnel, changement de profil, vocal, isolation audio, désabonnement, arrêt/reprise, reconnexion et arrivée tardive. L'option désactivant mDNS est limitée au navigateur de test pour les environnements sans résolution multicast.
 
 La capture réelle d'écran, le sélecteur Electron, le son système et l'accélération matérielle doivent être validés sur les machines cibles. Pour comparer les performances : même contenu, même résolution, même durée, relever CPU/GPU et diagnostic reçu sur une autre machine, en Ethernet puis en Wi-Fi. Le test synthétique ne mesure pas les performances 1080p60 d'un poste réel.
 

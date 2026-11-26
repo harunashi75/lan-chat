@@ -42,6 +42,7 @@ async function connectSignaling() {
     const url = new URL('/ws', location.href);
     url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('client', clientId);
+    url.searchParams.set('token', sessionToken);
     const ws = new WebSocket(url);
     signalSocket = ws;
     let incoming = Promise.resolve();
@@ -55,12 +56,16 @@ async function connectSignaling() {
         const data = JSON.parse(event.data);
         if (data.type === 'signal') await handleWebRTCSignals([data]);
         else if (data.type === 'state') await applyState(data);
+        else if (data.type === 'error') showToast(data.error);
       }).catch(err => console.error('Signalisation', err));
     };
     ws.onclose = event => {
-      if (event.code === 4001) {
+      if ((event.code === 4001 || event.code === 4003) && signalSocket === ws) {
+        // Identity taken over by another tab, or token rejected: start a fresh identity.
         clientId = crypto.randomUUID();
+        sessionToken = crypto.randomUUID();
         sessionStorage.setItem('lan_chat_client_id',clientId);
+        sessionStorage.setItem('lan_chat_token',sessionToken);
       }
       if (signalSocket !== ws) return;
       transportReady = false;

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """LAN Chat: HTTP + WebSocket signaling on one port; media stays peer-to-peer."""
 import asyncio
+import hmac
 import json
 import os
 from pathlib import Path
@@ -46,6 +47,7 @@ class Room:
     def __init__(self):
         self.users = {}
         self.sockets = {}
+        self.tokens = {}
         self.messages = []
         self.broadcast_lock = asyncio.Lock()
 
@@ -80,85 +82,56 @@ async def config(request):
 
 
 def check_origin(request):
-    """Allow same-origin websocket/POST, including access via the HTTPS tunnel."""
+    """Allow same-origin websocket, including access via the HTTPS tunnel."""
     from urllib.parse import urlsplit
     origin = request.headers.get('Origin')
     if origin and urlsplit(origin).netloc != request.host and origin not in request.app[ORIGINS_KEY]:
         raise web.HTTPForbidden(text='Origine non autorisée')
 
 
-async def websocket(request):
-    check_origin(request)
-    cid = request.query.get('client', '')
-    if not cid or len(cid) > 100 or not all(c.isalnum() or c in '-_' for c in cid):
-        raise web.HTTPBadRequest(text='Identifiant invalide')
-    room = request.app[ROOM_KEY]
-    ws = web.WebSocketResponse(heartbeat=15, max_msg_size=131072)
-    await ws.prepare(request)
-    # A second tab must not repeatedly take over the same identity.
-    if cid in room.sockets:
-        await ws.close(code=4001, message=b'Identifiant deja connecte')
-        return ws
-    room.sockets[cid] = ws
-    try:
-        async for message in ws:
-            if message.type != WSMsgType.TEXT:
-                continue
-            try:
-                data = json.loads(message.data)
-                if not isinstance(data, dict):
-                    raise ValueError('Objet attendu')
-                if data.get('type') == 'presence':
-                    user = {'id': cid, 'name': str(data.get('name', 'Utilisateur')).strip()[:40] or 'Utilisateur',
-                            'pc': 'Navigateur', 'in_voice': data.get('in_voice') is True,
-                            'sharing_screen': data.get('sharing_screen') is True,
-                            'receive_screens': data.get('receive_screens', True) is True}
-                    if room.users.get(cid) != user:
-                        room.users[cid] = user
-                        await room.broadcast()
-                    else:
-                        await ws.send_json(room.snapshot())
-                elif data.get('type') == 'signal' and cid in room.users:
-                    target = room.sockets.get(data.get('target'))
-                    signal = data.get('signal')
-                    if target is not None and target is not ws and isinstance(signal, dict):
-                        await target.send_json({'type': 'signal', 'from': cid, 'signal': signal})
-            except (ValueError, TypeError, ConnectionError, RuntimeError):
-                await ws.send_json({'type': 'error', 'error': 'Message invalide'})
-    finally:
-        if room.sockets.get(cid) is ws:
-            room.sockets.pop(cid, None)
-            room.users.pop(cid, None)
-            await asyncio.shield(room.broadcast())
-    return ws
+def valid_token(value):
+    return 16 <= len(value) <= 100 and all(c.isalnum() or c in '-_' for c in value)
 
 
-async def post_action(request):
-    check_origin(request)
-    room = request.app[ROOM_KEY]
-    try:
-        data = await request.json()
-        if not isinstance(data, dict):
-            raise ValueError()
-    except (ValueError, TypeError):
-        return web.json_response({'error': 'bad request'}, status=400)
-    cid = str(data.get('id', ''))
-    # Legacy reaction payload used the name; frontend now sends its client id too.
-    user = room.users.get(cid)
-    if not user:
-        return web.json_response({'error': 'Rejoignez le salon'}, status=403)
-    if request.path == '/message':
+def clean_name(value, fallback):
+    return str(value or '').strip()[:40] or fallback
+
+
+async def handle_presence(room, ws, cid, data):
+    user = {'id': cid, 'name': clean_name(data.get('name'), 'Utilisateur'),
+            'pc': 'Navigateur', 'in_voice': data.get('in_voice') is True,
+            'sharing_screen': data.get('sharing_screen') is True,
+            'receive_screens': data.get('receive_screens', True) is True}
+    if room.users.get(cid) != user:
+        room.users[cid] = user
+        await room.broadcast()
+    else:
+        await ws.send_json(room.snapshot())
+
+
+async def handle_signal(room, ws, cid, data):
+    target = room.sockets.get(data.get('target'))
+    signal = data.get('signal')
+    if target is not None and target is not ws and isinstance(signal, dict):
+        await target.send_json({'type': 'signal', 'from': cid, 'signal': signal})
+
+
+async def handle_chat(room, cid, data):
+    """Chat actions; the sender is always the authenticated socket's identity."""
+    user = room.users[cid]
+    kind = data['type']
+    if kind == 'message':
         text = str(data.get('text', '')).strip()[:2000]
         if not text:
-            return web.json_response({'error': 'invalid'}, status=400)
+            raise ValueError('Message vide')
         room.messages.append({'msg_id': 'msg_' + uuid.uuid4().hex, 'id': cid,
                               'name': user['name'], 'pc': user['pc'], 'text': text,
                               'time': time.time(), 'reactions': {}})
         del room.messages[:-200]
-    elif request.path == '/react':
+    elif kind == 'react':
         emoji = str(data.get('emoji', '')).strip()[:64]
         if not emoji:
-            return web.json_response({'error': 'invalid'}, status=400)
+            raise ValueError('Emoji vide')
         for msg in room.messages:
             if msg['msg_id'] == data.get('msg_id'):
                 names = msg['reactions'].setdefault(emoji, [])
@@ -169,10 +142,61 @@ async def post_action(request):
                 if not names:
                     del msg['reactions'][emoji]
                 break
-    elif request.path == '/update_profile':
-        user['name'] = str(data.get('name', '')).strip()[:40] or user['name']
+    elif kind == 'update_profile':
+        user['name'] = clean_name(data.get('name'), user['name'])
     await room.broadcast()
-    return web.json_response({'ok': True})
+
+
+async def websocket(request):
+    check_origin(request)
+    cid = request.query.get('client', '')
+    token = request.query.get('token', '')
+    if not cid or len(cid) > 100 or not all(c.isalnum() or c in '-_' for c in cid) or not valid_token(token):
+        raise web.HTTPBadRequest(text='Identifiant invalide')
+    room = request.app[ROOM_KEY]
+    ws = web.WebSocketResponse(heartbeat=15, max_msg_size=131072)
+    await ws.prepare(request)
+    # The first connection claims an identity with a secret token that is never broadcast.
+    # Only the holder of that token can use the id again (reconnection) or speak as it.
+    known = room.tokens.setdefault(cid, token)
+    if not hmac.compare_digest(known.encode(), token.encode()):
+        await ws.close(code=4003, message=b'Jeton invalide')
+        return ws
+    previous = room.sockets.get(cid)
+    room.sockets[cid] = ws
+    if previous is not None and not previous.closed:
+        # Same owner reconnecting (e.g. after a network drop): the new socket wins.
+        await previous.close(code=4001, message=b'Session reprise')
+    try:
+        async for message in ws:
+            if message.type != WSMsgType.TEXT:
+                continue
+            try:
+                data = json.loads(message.data)
+                if not isinstance(data, dict):
+                    raise ValueError('Objet attendu')
+                kind = data.get('type')
+                if kind == 'presence':
+                    await handle_presence(room, ws, cid, data)
+                elif cid not in room.users:
+                    raise ValueError('Rejoignez le salon')
+                elif kind == 'signal':
+                    await handle_signal(room, ws, cid, data)
+                elif kind in ('message', 'react', 'update_profile'):
+                    await handle_chat(room, cid, data)
+                else:
+                    raise ValueError('Type inconnu')
+            except (ValueError, TypeError, ConnectionError, RuntimeError) as error:
+                await ws.send_json({'type': 'error', 'error': str(error) or 'Message invalide'})
+    finally:
+        if room.sockets.get(cid) is ws:
+            room.sockets.pop(cid, None)
+            room.users.pop(cid, None)
+            # Keep the token while the identity still owns messages in the history.
+            if not any(m['id'] == cid for m in room.messages):
+                room.tokens.pop(cid, None)
+            await asyncio.shield(room.broadcast())
+    return ws
 
 
 async def cleanup(app):
@@ -188,8 +212,6 @@ def create_app():
     app.router.add_get('/config', config)
     app.router.add_get('/media.js', media_script)
     app.router.add_get('/ws', websocket)
-    for route in ('/message', '/react', '/update_profile'):
-        app.router.add_post(route, post_action)
     app.on_shutdown.append(cleanup)
     return app
 

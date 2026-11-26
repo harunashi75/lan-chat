@@ -480,6 +480,12 @@ if (!clientId) {
   sessionStorage.setItem("lan_chat_client_id", clientId); 
 }
 
+let sessionToken = sessionStorage.getItem("lan_chat_token");
+if (!sessionToken) {
+  sessionToken = crypto.randomUUID();
+  sessionStorage.setItem("lan_chat_token", sessionToken);
+}
+
 let username = localStorage.getItem("lan_chat_username") || "";
 let lastUsersSnapshot = "";
 let lastMessagesSnapshot = "";
@@ -710,62 +716,40 @@ function togglePicker(event, msgId) {
   if (picker) picker.classList.toggle('open');
 }
 
-async function toggleReaction(event, msgId, emoji) {
+function sendChat(payload){
+  if (signalSocket?.readyState !== WebSocket.OPEN) return false;
+  signalSocket.send(JSON.stringify(payload));
+  return true;
+}
+
+function toggleReaction(event, msgId, emoji) {
   if (event) event.stopPropagation();
-
-  try {
-    const response = await fetch("/react", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id:clientId, msg_id: msgId, emoji: emoji, name: username })
-    });
-
-    if (!response.ok) throw new Error("HTTP " + response.status);
-
-    const picker = $(`picker-${msgId}`);
-    if (picker) picker.classList.remove('open');
-
-    if (event && event.currentTarget) {
-      const badge = event.currentTarget.closest('.reaction-badge');
-      if (badge) {
-        badge.classList.remove('reaction-pop');
-        void badge.offsetWidth;
-        badge.classList.add('reaction-pop');
-      }
-    }
-
-    await getState();
-  } catch(e) {
-    console.error("Erreur réaction :", e);
+  if (!sendChat({ type:"react", msg_id:msgId, emoji })) {
     showToast("Erreur lors de la réaction");
+    return;
+  }
+  const picker = $(`picker-${msgId}`);
+  if (picker) picker.classList.remove('open');
+  const badge = event?.currentTarget?.closest('.reaction-badge');
+  if (badge) {
+    badge.classList.remove('reaction-pop');
+    void badge.offsetWidth;
+    badge.classList.add('reaction-pop');
   }
 }
 
-async function sendMessage(){
+function sendMessage(){
   const text = input.value.trim();
   if(!text || !joined) return;
-
-  sendButton.disabled = true;
-
-  try{
-    const response = await fetch("/message", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id:clientId, name:username, text:text})
-    });
-
-    if(!response.ok) throw new Error("HTTP " + response.status);
-
-    input.value = "";
-    input.style.height = "40px";
-    await getState();
-    input.focus();
-  }catch(error){
+  if(!sendChat({ type:"message", text })){
     showToast("Impossible d'envoyer le message");
     connectionEl.innerHTML = '<span class="dot" style="background:#ff3b30"></span>Connexion interrompue';
-  }finally{
-    sendButton.disabled = !input.value.trim() || !joined;
+    return;
   }
+  input.value = "";
+  input.style.height = "40px";
+  updateSendButton();
+  input.focus();
 }
 
 function buildEmojiPicker(){
