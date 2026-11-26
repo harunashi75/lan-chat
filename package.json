@@ -47,6 +47,7 @@
     },
     "files": [
       "main.js",
+      "electron/*.js",
       "desktop-preload.js",
       "setup.html",
       "capture-picker.html",

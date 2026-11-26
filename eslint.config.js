@@ -9,7 +9,7 @@ module.exports = [
     languageOptions: { sourceType: 'module', globals: globals.browser }
   },
   {
-    files: ['main.js', 'desktop-preload.js', 'eslint.config.js', 'scripts/**/*.cjs'],
+    files: ['main.js', 'desktop-preload.js', 'electron/**/*.js', 'eslint.config.js', 'scripts/**/*.cjs'],
     languageOptions: { sourceType: 'commonjs', globals: globals.node }
   },
   {

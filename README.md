@@ -97,6 +97,23 @@ Le serveur STUN Google conserve la découverte publique déjà utilisée par le 
 
 Chaque navigateur ouvre une session avec un jeton secret (jamais diffusé) : le chat, les réactions et les signaux passent par le WebSocket et sont attribués à l'identité authentifiée de la connexion, ce qui empêche d'écrire au nom d'un autre. Le jeton permet aussi de reprendre sa session après une coupure réseau. Chaque connexion a sa propre file d'envoi : un client lent ou bloqué est déconnecté (il se resynchronise en se reconnectant) sans retarder les autres. Le débit des messages est limité par connexion (chat/réactions : rafale de 10 puis 2/s ; présence : 20 puis 5/s ; signaux WebRTC : 300 puis 150/s) et une connexion qui insiste est fermée. Les emojis animés (Noto, Google) sont désactivés par défaut : ils chargent des images depuis `fonts.gstatic.com`, ce qui révèle l'IP des participants à Google et ne fonctionne pas hors-ligne. Le réglage « Emojis animés » du panneau Settings les active pour ce navigateur ; sinon, un emoji seul s'affiche en grand avec la police du système. Il n'y a pas de comptes. Sans `LAN_CHAT_PASSWORD`, le lien donne accès au salon ; avec, le mot de passe est exigé pour ouvrir le WebSocket et pour recevoir la configuration ICE (donc les identifiants TURN). Il n'y a pas de limitation de tentatives : choisissez un mot de passe long. L'application reste destinée à un groupe de confiance.
 
+## Structure du code
+
+```
+server.py              point d'entrée du serveur (démarrage, tunnel)
+lanchat/               serveur : config, room (état, file d'envoi, rate-limit), handlers (messages),
+                       routes (HTTP + boucle WebSocket), tunnel (Pinggy), app (fabrique)
+index.html             structure de la page uniquement
+static/app.js          assemblage des modules et des événements serveur
+static/session.js      identité, WebSocket, reconnexion, présence
+static/chat/           utilisateurs, messages et réactions, saisie et emojis, connexion, mise en page
+static/media/          WebRTC : state, profiles, tiles, peers, capture, diagnostics
+static/settings.js     fenêtre Paramètres et thème
+main.js, electron/     Electron : fenêtres et cycle de vie, serveur intégré, capture d'écran
+tests/                 tests serveur (unittest) et test navigateur de bout en bout (Playwright)
+scripts/               construction du serveur gelé, icône, lanceur Python portable
+```
+
 ## Préparer un futur rendu vidéo / SFU
 
 - `static/media/` contient la capture, les profils, les émetteurs, la négociation, les sorties audio/vidéo et les diagnostics, séparés du chat. Il ne parle jamais au socket directement : `static/session.js` porte l'identité, le WebSocket et la présence (événements `on(...)`, `send`, `updatePresence`), `static/app.js` l'assemblage, `static/chat/` le chat (utilisateurs, messages et réactions, saisie et emojis, connexion, mise en page mobile), `static/settings.js` la fenêtre Paramètres, `static/emoji.js` et `static/util.js` les utilitaires, `static/style.css` le style. Ce sont des modules ES sans variables globales partagées ; `window.__lanChat` n'expose qu'un accès en lecture pour le test navigateur.
