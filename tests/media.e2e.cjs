@@ -76,6 +76,33 @@ try {
   await alice.waitForFunction(() => __lanChat.users.length===2);
   await alice.fill('#messageInput','Bonjour WebSocket');await alice.click('#sendButton');
   await bob.waitForFunction(() => document.getElementById('messages').textContent.includes('Bonjour WebSocket'));
+  // Typing hint reaches the other participant and disappears once the message is sent.
+  await alice.fill('#messageInput','je tape un message');
+  await bob.waitForFunction(() => document.getElementById('typing').textContent.includes('Alice écrit'),null,{timeout:5000});
+  await alice.click('#sendButton');
+  await bob.waitForFunction(() => document.getElementById('typing').textContent === '');
+  // A message that arrives while the window is in the background raises the unread counter.
+  await bob.evaluate(() => { document.hasFocus = () => false; });
+  await alice.fill('#messageInput','compteur');await alice.click('#sendButton');
+  await bob.waitForFunction(() => document.title.startsWith('(1)'));
+  await bob.waitForFunction(() => document.querySelector('link[rel=icon]').href.startsWith('data:image/png'),null,{timeout:5000});
+  await bob.evaluate(() => { delete document.hasFocus; window.dispatchEvent(new Event('focus')); });
+  await bob.waitForFunction(() => document.title === 'LAN Chat');
+  // Sound preferences persist.
+  await settings(bob,'notifications',async () => {
+    await bob.uncheck('#soundVoice');
+    assert.equal(await bob.evaluate(() => localStorage.getItem('lan_chat_sound_voice')),'0');
+    await bob.check('#soundVoice');
+    await bob.click('#soundTest');
+  });
+  // The accent colour re-themes the whole UI.
+  await settings(bob,'appearance',async () => {
+    await bob.click('.swatch[data-accent="pink"]');
+    assert.equal(await bob.evaluate(() => document.documentElement.dataset.accent),'pink');
+    assert.match(await bob.evaluate(() => getComputedStyle(document.body).getPropertyValue('--blue')),/236/);
+    await bob.click('.swatch[data-accent="blue"]');
+    assert.equal(await bob.evaluate(() => document.documentElement.dataset.accent),undefined);
+  });
   // A lone emoji makes no external request by default; the opt-in switch loads the animated image.
   await alice.fill('#messageInput','😀');await alice.click('#sendButton');
   await bob.waitForFunction(() => document.querySelector('.noto-emoji-fallback'));

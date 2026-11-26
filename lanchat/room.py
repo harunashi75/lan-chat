@@ -7,7 +7,7 @@ SEND_TIMEOUT = 5          # seconds a single send may take before the peer is dr
 MAX_QUEUE = 200           # messages waiting for one slow peer before it is dropped
 
 # (burst, refill per second) per connection and kind of message.
-RATE_LIMITS = {'chat': (10, 2.0), 'presence': (20, 5.0), 'signal': (300, 150.0)}
+RATE_LIMITS = {'chat': (10, 2.0), 'presence': (20, 5.0), 'signal': (300, 150.0), 'typing': (6, 1.0)}
 MAX_VIOLATIONS = 50
 
 
@@ -76,7 +76,9 @@ class Room:
         """Full state, sent once to a socket that joins. Later changes are deltas."""
         return {**self.users_payload(), 'type': 'state', 'messages': self.messages[-200:]}
 
-    def broadcast(self, payload=None):
+    def broadcast(self, payload=None, exclude=None):
+        """Queue a payload for everyone (default: the user list), optionally except one client id."""
         text = json.dumps(payload or self.users_payload())
-        for client in list(self.sockets.values()):
-            client.send_text(text)
+        for cid, client in list(self.sockets.items()):
+            if cid != exclude:
+                client.send_text(text)

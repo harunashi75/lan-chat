@@ -32,6 +32,11 @@ def handle_signal(room, client, cid, data):
         target.send({'type': 'signal', 'from': cid, 'signal': signal})
 
 
+def handle_typing(room, cid):
+    """Tell the others that this user is typing. Not stored: it is only a live hint."""
+    room.broadcast({'type': 'typing', 'id': cid, 'name': room.users[cid]['name']}, exclude=cid)
+
+
 def handle_chat(room, cid, data):
     """Chat actions; the sender is always the authenticated socket's identity."""
     user = room.users[cid]

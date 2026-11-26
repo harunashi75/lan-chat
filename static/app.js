@@ -9,23 +9,35 @@ import { initMessages, addMessage, renderMessages, applyReactions, isAnimatedEmo
 import { initComposer } from "./chat/composer.js";
 import { initJoin, isJoined, requirePassword } from "./chat/join.js";
 import { initLayout } from "./chat/layout.js";
+import { onTyping, clearTyper, pruneTypers } from "./chat/typing.js";
+import { initNotifications, notifyMessage, trackVoice, resetVoiceTracking } from "./chat/notifications.js";
 
 // Server events. "state" is the full snapshot (users + history) sent on join;
 // "users", "message" and "reactions" are the deltas that follow.
 function onUsers(data) {
   setConnection("Connecté", "ok");
   renderUsers(data.users || [], data.voice_users || []);
+  pruneTypers(new Set((data.users || []).map(user => user.id)));
+  trackVoice(data.voice_users || []);
   if (data.messages) renderMessages(data.messages);
 }
+on("state", resetVoiceTracking); // the full snapshot is not a change: no sounds for it
 on("state", onUsers);
 on("users", onUsers);
-on("message", data => addMessage(data.message));
+on("message", data => {
+  clearTyper(data.message.id);
+  addMessage(data.message);
+  notifyMessage(data.message);
+});
+on("typing", onTyping);
+on("disconnect", resetVoiceTracking);
 on("reactions", data => applyReactions(data.msg_id, data.reactions, true));
 on("error", data => showToast(data.error));
 on("status", text => setConnection(text, "warn"));
 on("needpassword", requirePassword);
 
 initMessages();
+initNotifications();
 initComposer();
 initJoin();
 initLayout();

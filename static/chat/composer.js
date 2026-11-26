@@ -3,6 +3,7 @@ import { $, showToast } from "../util.js";
 import { emojiData, emojiIcons } from "../emoji.js";
 import { send } from "../session.js";
 import { setConnection } from "./connection.js";
+import { notifyTyping, resetTypingNotice } from "./typing.js";
 
 const input = $("messageInput");
 const sendButton = $("sendButton");
@@ -30,6 +31,7 @@ function sendMessage() {
   }
   input.value = "";
   input.style.height = "40px";
+  resetTypingNotice();
   updateSendButton();
   input.focus();
 }
@@ -79,6 +81,7 @@ export function initComposer() {
     input.style.height = "40px";
     input.style.height = Math.min(input.scrollHeight, 130) + "px";
     updateSendButton();
+    if (input.value.trim()) notifyTyping();
   });
   input.addEventListener("keydown", event => {
     if (event.key === "Enter" && !event.shiftKey) {

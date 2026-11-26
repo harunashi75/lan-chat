@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 from aiohttp import WSMsgType, web
 
 from .config import BASE_DIR, ORIGINS_KEY, PASSWORD_KEY, ROOM_KEY, RTC_KEY
-from .handlers import handle_chat, handle_presence, handle_signal, valid_token
+from .handlers import handle_chat, handle_presence, handle_signal, handle_typing, valid_token
 from .room import MAX_VIOLATIONS, RATE_LIMITS, Client, TokenBucket
 
 
@@ -74,7 +74,7 @@ async def websocket(request):
                 if not isinstance(data, dict):
                     raise ValueError('Objet attendu')
                 kind = data.get('type')
-                bucket = buckets['presence' if kind == 'presence' else 'signal' if kind == 'signal' else 'chat']
+                bucket = buckets[kind if kind in RATE_LIMITS else 'chat']
                 if not bucket.allow():
                     violations += 1
                     if violations > MAX_VIOLATIONS:
@@ -89,6 +89,8 @@ async def websocket(request):
                     synced = True
                 elif cid not in room.users:
                     raise ValueError('Rejoignez le salon')
+                elif kind == 'typing':
+                    handle_typing(room, cid)
                 elif kind == 'signal':
                     handle_signal(room, client, cid, data)
                 elif kind in ('message', 'react'):

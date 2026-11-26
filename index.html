@@ -72,6 +72,7 @@
     </section>
 
     <div class="composer-wrap">
+      <div class="typing" id="typing" aria-live="polite"></div>
       <div class="composer">
         <div class="emoji-picker" id="emojiPicker">
           <div class="emoji-tabs" id="emojiTabs"></div>
@@ -106,6 +107,7 @@
       <h2 id="settingsTitle">Paramètres</h2>
       <button class="settings-tab active" role="tab" data-tab="profile" aria-selected="true"><span aria-hidden="true">👤</span><span>Profil</span></button>
       <button class="settings-tab" role="tab" data-tab="appearance" aria-selected="false"><span aria-hidden="true">🎨</span><span>Apparence</span></button>
+      <button class="settings-tab" role="tab" data-tab="notifications" aria-selected="false"><span aria-hidden="true">🔔</span><span>Notifications</span></button>
       <button class="settings-tab" role="tab" data-tab="media" aria-selected="false"><span aria-hidden="true">🖥️</span><span>Partage d'écran</span></button>
       <button class="settings-tab" role="tab" data-tab="diagnostics" aria-selected="false"><span aria-hidden="true">📊</span><span>Diagnostic</span></button>
       <button class="settings-tab" role="tab" data-tab="about" aria-selected="false"><span aria-hidden="true">ℹ️</span><span>À propos</span></button>
@@ -137,6 +139,15 @@
         <h3>Apparence</h3>
         <p class="settings-lead">Thème et affichage des messages.</p>
         <div class="settings-group">
+          <h4>Couleur d'accent</h4>
+          <div class="swatches" id="accentChoice" role="radiogroup" aria-label="Couleur d'accent">
+            <button type="button" class="swatch" role="radio" data-accent="blue" style="--sw:22 131 255" aria-label="Bleu" title="Bleu"></button>
+            <button type="button" class="swatch" role="radio" data-accent="violet" style="--sw:124 92 255" aria-label="Violet" title="Violet"></button>
+            <button type="button" class="swatch" role="radio" data-accent="green" style="--sw:28 158 102" aria-label="Vert" title="Vert"></button>
+            <button type="button" class="swatch" role="radio" data-accent="pink" style="--sw:236 72 153" aria-label="Rose" title="Rose"></button>
+          </div>
+        </div>
+        <div class="settings-group">
           <h4>Thème</h4>
           <div class="segmented" id="themeChoice" role="group" aria-label="Thème">
             <button type="button" data-theme="light" aria-pressed="false">☀️ Clair</button>
@@ -150,6 +161,29 @@
             <span class="media-switch-copy">Emojis animés<small>Charge des images depuis les serveurs de Google (révèle votre IP)</small></span>
             <input id="animatedEmoji" type="checkbox" role="switch"><span class="switch-track" aria-hidden="true"></span>
           </label>
+        </div>
+      </section>
+
+      <section class="settings-panel" data-panel="notifications" role="tabpanel">
+        <h3>Notifications</h3>
+        <p class="settings-lead">Des sons discrets et un compteur quand la fenêtre est en arrière-plan.</p>
+        <div class="settings-group">
+          <label class="media-switch">
+            <span class="media-switch-copy">Sons des messages<small>Un petit son à l'arrivée d'un message quand la fenêtre n'est pas active</small></span>
+            <input id="soundMessages" type="checkbox" role="switch"><span class="switch-track" aria-hidden="true"></span>
+          </label>
+          <label class="media-switch">
+            <span class="media-switch-copy">Sons du vocal<small>Quand quelqu'un rejoint ou quitte le vocal où vous êtes, ou quand vous y entrez</small></span>
+            <input id="soundVoice" type="checkbox" role="switch"><span class="switch-track" aria-hidden="true"></span>
+          </label>
+        </div>
+        <div class="settings-group">
+          <label class="field-label" for="soundVolume">Volume des sons</label>
+          <div class="field-row">
+            <input class="volume-slider" id="soundVolume" type="range" min="0" max="100" step="5">
+            <button class="btn-secondary" id="soundTest" type="button">Tester</button>
+          </div>
+          <p class="settings-hint">Le compteur apparaît dans le titre de l'onglet et sur son icône tant que vous n'avez pas lu les messages.</p>
         </div>
       </section>
 

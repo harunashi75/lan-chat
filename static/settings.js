@@ -3,6 +3,8 @@ import { $, showToast, initials, avatarHue } from "./util.js";
 import { getName, setName, getClientId } from "./session.js";
 
 const THEME_KEY = "lan_chat_theme";
+const ACCENT_KEY = "lan_chat_accent";
+const ACCENTS = ["blue", "violet", "green", "pink"];
 const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
 let themeMode = "system";
 let lastTab = "profile";
@@ -16,6 +18,17 @@ function applyTheme(mode) {
     button.setAttribute("aria-pressed", String(button.dataset.theme === mode));
   });
 }
+
+// The accent is a data attribute on <html>; base.css maps it to --accent-rgb. Applied at load, before the UI shows.
+function applyAccent(accent) {
+  const name = ACCENTS.includes(accent) ? accent : "blue";
+  if (name === "blue") delete document.documentElement.dataset.accent;
+  else document.documentElement.dataset.accent = name;
+  document.querySelectorAll("#accentChoice .swatch").forEach(swatch => {
+    swatch.setAttribute("aria-checked", String(swatch.dataset.accent === name));
+  });
+}
+applyAccent(localStorage.getItem(ACCENT_KEY));
 
 function showTab(tab) {
   lastTab = tab;
@@ -102,6 +115,14 @@ export function initSettings({ isJoined, animatedEmoji, onAnimatedEmoji }) {
     button.addEventListener("click", () => {
       localStorage.setItem(THEME_KEY, button.dataset.theme);
       applyTheme(button.dataset.theme);
+    });
+  });
+
+  applyAccent(localStorage.getItem(ACCENT_KEY));
+  document.querySelectorAll("#accentChoice .swatch").forEach(swatch => {
+    swatch.addEventListener("click", () => {
+      localStorage.setItem(ACCENT_KEY, swatch.dataset.accent);
+      applyAccent(swatch.dataset.accent);
     });
   });
 

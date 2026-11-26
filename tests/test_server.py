@@ -143,6 +143,38 @@ class SignalingTests(AioHTTPTestCase):
         await alice.close()
         await bob.close()
 
+    async def test_typing_reaches_others_only_and_is_rate_limited(self):
+        alice = await self.connect('alice')
+        bob = await self.connect('bob')
+        await alice.send_json({'type': 'typing'})
+        hint = await self.delta(bob, 'typing')
+        self.assertEqual((hint['id'], hint['name']), ('alice', 'alice'))
+        # The sender never gets its own hint back; a burst is cut by the rate limit.
+        for _ in range(20):
+            await alice.send_json({'type': 'typing'})
+        await alice.send_json({'type': 'message', 'text': 'fin'})
+        seen = 0
+        while True:
+            data = await alice.receive_json()
+            self.assertNotEqual(data['type'], 'typing')
+            if data['type'] == 'message':
+                break
+        async with asyncio.timeout(3):
+            while True:
+                data = await bob.receive_json()
+                if data['type'] == 'typing':
+                    seen += 1
+                if data['type'] == 'message':
+                    break
+        self.assertLessEqual(seen, 6)
+        # Typing before joining is refused.
+        ghost = await self.client.ws_connect('/ws?client=ghost&token=' + 'g' * 20)
+        await ghost.send_json({'type': 'typing'})
+        self.assertEqual((await ghost.receive_json())['type'], 'error')
+        await ghost.close()
+        await alice.close()
+        await bob.close()
+
     async def test_joiner_gets_snapshot_then_only_deltas(self):
         alice = await self.connect('alice')
         await alice.send_json({'type': 'message', 'text': 'avant'})
