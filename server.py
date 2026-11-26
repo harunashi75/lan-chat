@@ -16,6 +16,7 @@ from aiohttp import web, WSMsgType
 ROOM_KEY = web.AppKey("room", object)
 RTC_KEY = web.AppKey("rtc_config", dict)
 ORIGINS_KEY = web.AppKey("public_origins", set)
+PASSWORD_KEY = web.AppKey("password", str)
 
 BASE_DIR = Path(__file__).resolve().parent
 HOST = os.environ.get('LAN_CHAT_HOST', '0.0.0.0')
@@ -51,15 +52,19 @@ class Room:
         self.messages = []
         self.broadcast_lock = asyncio.Lock()
 
-    def snapshot(self):
+    def users_payload(self):
         users = list(self.users.values())
-        return {'type': 'state', 'users': users, 'messages': self.messages[-200:],
+        return {'type': 'users', 'users': users,
                 'voice_users': [{'id': u['id'], 'name': u['name']} for u in users if u['in_voice']],
                 'screen_users': [{'id': u['id'], 'name': u['name']} for u in users if u['sharing_screen']]}
 
-    async def broadcast(self):
+    def snapshot(self):
+        """Full state, sent once to a socket that joins. Later changes are deltas."""
+        return {**self.users_payload(), 'type': 'state', 'messages': self.messages[-200:]}
+
+    async def broadcast(self, payload=None):
         async with self.broadcast_lock:
-            data = self.snapshot()
+            data = payload or self.users_payload()
             async def deliver(ws):
                 try:
                     await asyncio.wait_for(ws.send_json(data), 5)
@@ -77,8 +82,18 @@ async def media_script(request):
     return web.FileResponse(BASE_DIR / 'media.js', headers={'Cache-Control': 'no-store'})
 
 
+def password_ok(app, supplied):
+    expected = app[PASSWORD_KEY]
+    return not expected or hmac.compare_digest(expected.encode(), supplied.encode())
+
+
 async def config(request):
-    return web.json_response(request.app[RTC_KEY], headers={'Cache-Control': 'no-store'})
+    app = request.app
+    public = {'mediaTopology': app[RTC_KEY]['mediaTopology'], 'passwordRequired': bool(app[PASSWORD_KEY])}
+    # ICE servers may carry TURN credentials: only hand them to clients that know the password.
+    if password_ok(app, request.headers.get('X-Room-Password', '')):
+        public.update(app[RTC_KEY])
+    return web.json_response(public, headers={'Cache-Control': 'no-store'})
 
 
 def check_origin(request):
@@ -97,16 +112,18 @@ def clean_name(value, fallback):
     return str(value or '').strip()[:40] or fallback
 
 
-async def handle_presence(room, ws, cid, data):
+async def handle_presence(room, ws, cid, data, first):
     user = {'id': cid, 'name': clean_name(data.get('name'), 'Utilisateur'),
             'pc': 'Navigateur', 'in_voice': data.get('in_voice') is True,
             'sharing_screen': data.get('sharing_screen') is True,
             'receive_screens': data.get('receive_screens', True) is True}
-    if room.users.get(cid) != user:
+    changed = room.users.get(cid) != user
+    if changed:
         room.users[cid] = user
-        await room.broadcast()
-    else:
+    if first:
         await ws.send_json(room.snapshot())
+    if changed:
+        await room.broadcast()
 
 
 async def handle_signal(room, ws, cid, data):
@@ -128,6 +145,8 @@ async def handle_chat(room, cid, data):
                               'name': user['name'], 'pc': user['pc'], 'text': text,
                               'time': time.time(), 'reactions': {}})
         del room.messages[:-200]
+        await room.broadcast({'type': 'message', 'message': room.messages[-1]})
+        return
     elif kind == 'react':
         emoji = str(data.get('emoji', '')).strip()[:64]
         if not emoji:
@@ -141,10 +160,12 @@ async def handle_chat(room, cid, data):
                     names.append(user['name'])
                 if not names:
                     del msg['reactions'][emoji]
+                await room.broadcast({'type': 'reactions', 'msg_id': msg['msg_id'], 'reactions': msg['reactions']})
                 break
+        return
     elif kind == 'update_profile':
         user['name'] = clean_name(data.get('name'), user['name'])
-    await room.broadcast()
+        await room.broadcast()
 
 
 async def websocket(request):
@@ -156,6 +177,9 @@ async def websocket(request):
     room = request.app[ROOM_KEY]
     ws = web.WebSocketResponse(heartbeat=15, max_msg_size=131072)
     await ws.prepare(request)
+    if not password_ok(request.app, request.query.get('password', '')):
+        await ws.close(code=4004, message=b'Mot de passe requis')
+        return ws
     # The first connection claims an identity with a secret token that is never broadcast.
     # Only the holder of that token can use the id again (reconnection) or speak as it.
     known = room.tokens.setdefault(cid, token)
@@ -167,6 +191,7 @@ async def websocket(request):
     if previous is not None and not previous.closed:
         # Same owner reconnecting (e.g. after a network drop): the new socket wins.
         await previous.close(code=4001, message=b'Session reprise')
+    synced = False
     try:
         async for message in ws:
             if message.type != WSMsgType.TEXT:
@@ -177,7 +202,8 @@ async def websocket(request):
                     raise ValueError('Objet attendu')
                 kind = data.get('type')
                 if kind == 'presence':
-                    await handle_presence(room, ws, cid, data)
+                    await handle_presence(room, ws, cid, data, not synced)
+                    synced = True
                 elif cid not in room.users:
                     raise ValueError('Rejoignez le salon')
                 elif kind == 'signal':
@@ -207,6 +233,7 @@ def create_app():
     app = web.Application(client_max_size=131072)
     app[ROOM_KEY] = Room()
     app[RTC_KEY] = load_rtc_config()
+    app[PASSWORD_KEY] = os.environ.get('LAN_CHAT_PASSWORD', '')
     app[ORIGINS_KEY] = {value.strip().rstrip('/') for value in os.environ.get('LAN_CHAT_PUBLIC_ORIGINS', '').split(',') if value.strip()}
     app.router.add_get('/', index)
     app.router.add_get('/config', config)
@@ -217,11 +244,13 @@ def create_app():
 
 
 async def tunnel_lifecycle(app):
-    if os.environ.get('LAN_CHAT_TUNNEL', '1') == '0':
+    if os.environ.get('LAN_CHAT_TUNNEL', '0') != '1':
         yield
         return
     process = None
     task = None
+    if not app[PASSWORD_KEY]:
+        print('⚠️  Tunnel public actif sans LAN_CHAT_PASSWORD : le salon est ouvert à quiconque a le lien.', flush=True)
     try:
         process = subprocess.Popen(['ssh', '-T', '-p', '443', '-o', 'StrictHostKeyChecking=accept-new',
                                     '-o', 'ServerAliveInterval=30', f'-R0:localhost:{PORT}',

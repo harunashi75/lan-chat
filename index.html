@@ -155,6 +155,7 @@ button{border:0;cursor:pointer}
   position:relative;box-shadow:0 3px 10px rgba(0,0,0,.025)
 }
 .message-row.mine .bubble{background:var(--blue);color:white}
+.reactions-bar:empty{display:none}
 .reactions-bar{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
 .message-row.mine .reactions-bar{justify-content:flex-end}
 .reaction-badge{
@@ -447,6 +448,7 @@ textarea::placeholder{color:var(--muted)}
     <h2>Bienvenue 👋</h2>
     <p>Choisis le nom qui sera affiché aux autres personnes dans ce chat.</p>
     <input class="name-input" id="nameInput" maxlength="32" placeholder="Ton nom..." autocomplete="off">
+    <input class="name-input" id="passwordInput" type="password" maxlength="100" placeholder="Mot de passe du salon" autocomplete="off" hidden style="margin-top:10px">
     <button class="join-button" id="joinButton">Rejoindre le chat</button>
   </div>
 </div>
@@ -463,6 +465,7 @@ const sendButton = $("sendButton");
 const emojiPicker = $("emojiPicker");
 const overlay = $("overlay");
 const nameInput = $("nameInput");
+const passwordInput = $("passwordInput");
 const joinButton = $("joinButton");
 const connectionEl = $("connection");
 const emptyEl = $("empty");
@@ -486,9 +489,9 @@ if (!sessionToken) {
   sessionStorage.setItem("lan_chat_token", sessionToken);
 }
 
+let roomPassword = sessionStorage.getItem("lan_chat_password") || "";
 let username = localStorage.getItem("lan_chat_username") || "";
 let lastUsersSnapshot = "";
-let lastMessagesSnapshot = "";
 let joined = false;
 
 if (username) nameInput.value = username;
@@ -637,72 +640,82 @@ function isAnimatedEmojiOnly(text) {
   return Boolean(getSingleEmojiGrapheme(text));
 }
 
-// --- 5. AFFICHAGE DES MESSAGES & RÉACTIONS ---
-function renderMessages(list){
-  const snapshot = JSON.stringify(list || []);
-  if(snapshot === lastMessagesSnapshot) return;
-  lastMessagesSnapshot = snapshot;
+// --- 5. AFFICHAGE DES MESSAGES & RÉACTIONS (rendu incrémental) ---
+const MAX_MESSAGES = 200;
+const messageRows = new Map(); // msg_id -> { row, reactions }
 
-  if(!list || !list.length){
-    emptyEl.style.display = "block";
-    messagesEl.querySelectorAll(".message-row").forEach(e => e.remove());
-    return;
-  }
+function nearBottom(){
+  return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
+}
 
-  emptyEl.style.display = "none";
-  const shouldScroll = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
-  messagesEl.querySelectorAll(".message-row").forEach(e => e.remove());
-
-  list.forEach(msg => {
-    const mine = msg.id ? (msg.id === clientId) : (msg.name === username);
-    const row = document.createElement("div");
-    row.className = "message-row" + (mine ? " mine" : "");
-
-    const time = msg.time ? new Date(msg.time * 1000) : new Date();
-    const timeText = time.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-
-    // Génération du HTML des réactions
-    let reactionsHtml = "";
-    if (msg.reactions && Object.keys(msg.reactions).length > 0) {
-      reactionsHtml = '<div class="reactions-bar">';
-      for (const [emoji, names] of Object.entries(msg.reactions)) {
-        const hasReacted = names.includes(username);
-        reactionsHtml += `
-          <div class="reaction-badge ${hasReacted ? 'active' : ''}" data-reaction="${escapeHtml(emoji)}">
-            <span>${escapeHtml(emoji)}</span>
-            <span>${names.length}</span>
-          </div>
-        `;
-      }
-      reactionsHtml += '</div>';
-    }
-
-    row.innerHTML = `
-      <div class="message">
-        <button class="react-btn-trigger" onclick="togglePicker(event, '${msg.msg_id}')">➕</button>
-        <div class="quick-react-picker" id="picker-${msg.msg_id}">
-          <button class="quick-react-btn" onclick="toggleReaction(event, '${msg.msg_id}', '👍')">👍</button>
-          <button class="quick-react-btn" onclick="toggleReaction(event, '${msg.msg_id}', '❤️')">❤️</button>
-          <button class="quick-react-btn" onclick="toggleReaction(event, '${msg.msg_id}', '🔥')">🔥</button>
-          <button class="quick-react-btn" onclick="toggleReaction(event, '${msg.msg_id}', '😂')">😂</button>
-          <button class="quick-react-btn" onclick="toggleReaction(event, '${msg.msg_id}', '🎉')">🎉</button>
-          <button class="quick-react-btn" onclick="toggleReaction(event, '${msg.msg_id}', '👀')">👀</button>
-        </div>
-        <div class="message-avatar">${escapeHtml(initials(msg.name))}</div>
-        <div class="message-body">
-          <div class="meta">${escapeHtml(msg.name)} · ${timeText}</div>
-          <div class="bubble ${isAnimatedEmojiOnly(msg.text) ? 'emoji-only-bubble' : ''}">${renderMessageText(msg.text)}</div>
-          ${reactionsHtml}
-        </div>
+function buildMessageRow(msg){
+  const mine = msg.id ? (msg.id === clientId) : (msg.name === username);
+  const row = document.createElement("div");
+  row.className = "message-row" + (mine ? " mine" : "");
+  const time = msg.time ? new Date(msg.time * 1000) : new Date();
+  const timeText = time.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  const id = escapeHtml(msg.msg_id);
+  row.innerHTML = `
+    <div class="message">
+      <button class="react-btn-trigger" data-action="picker">➕</button>
+      <div class="quick-react-picker" id="picker-${id}">
+        ${["👍","❤️","🔥","😂","🎉","👀"].map(e => `<button class="quick-react-btn" data-emoji="${e}">${e}</button>`).join("")}
       </div>
-    `;
-    row.querySelectorAll('[data-reaction]').forEach(badge => {
-      badge.addEventListener('click', event => toggleReaction(event,msg.msg_id,badge.dataset.reaction));
-    });
-    messagesEl.appendChild(row);
+      <div class="message-avatar">${escapeHtml(initials(msg.name))}</div>
+      <div class="message-body">
+        <div class="meta">${escapeHtml(msg.name)} · ${timeText}</div>
+        <div class="bubble ${isAnimatedEmojiOnly(msg.text) ? 'emoji-only-bubble' : ''}">${renderMessageText(msg.text)}</div>
+        <div class="reactions-bar"></div>
+      </div>
+    </div>`;
+  row.querySelector('[data-action="picker"]').addEventListener('click', event => togglePicker(event, msg.msg_id));
+  row.querySelectorAll('.quick-react-btn').forEach(button => {
+    button.addEventListener('click', event => toggleReaction(event, msg.msg_id, button.dataset.emoji));
   });
+  return row;
+}
 
-  if(shouldScroll) messagesEl.scrollTop = messagesEl.scrollHeight;
+function applyReactions(msgId, reactions, animate){
+  const entry = messageRows.get(msgId);
+  if(!entry) return;
+  const previous = entry.reactions || {};
+  const bar = entry.row.querySelector(".reactions-bar");
+  bar.textContent = "";
+  for (const [emoji, names] of Object.entries(reactions || {})) {
+    const badge = document.createElement("div");
+    badge.className = "reaction-badge" + (names.includes(username) ? " active" : "");
+    badge.dataset.reaction = emoji;
+    badge.innerHTML = `<span>${escapeHtml(emoji)}</span><span>${names.length}</span>`;
+    badge.addEventListener("click", event => toggleReaction(event, msgId, emoji));
+    if (animate && (previous[emoji]?.length || 0) !== names.length) badge.classList.add("reaction-pop");
+    bar.appendChild(badge);
+  }
+  entry.reactions = reactions || {};
+}
+
+function addMessage(msg, scroll = true){
+  if(messageRows.has(msg.msg_id)) return;
+  const stick = scroll && (nearBottom() || msg.id === clientId);
+  emptyEl.style.display = "none";
+  const row = buildMessageRow(msg);
+  messageRows.set(msg.msg_id, { row, reactions: {} });
+  messagesEl.appendChild(row);
+  applyReactions(msg.msg_id, msg.reactions, false);
+  while(messageRows.size > MAX_MESSAGES){
+    const [oldId, old] = messageRows.entries().next().value;
+    old.row.remove();
+    messageRows.delete(oldId);
+  }
+  if(stick) messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// Full state, received once when joining or reconnecting.
+function renderMessages(list){
+  messageRows.forEach(entry => entry.row.remove());
+  messageRows.clear();
+  emptyEl.style.display = list && list.length ? "none" : "block";
+  (list || []).forEach(msg => addMessage(msg, false));
+  messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
 function togglePicker(event, msgId) {
@@ -730,12 +743,6 @@ function toggleReaction(event, msgId, emoji) {
   }
   const picker = $(`picker-${msgId}`);
   if (picker) picker.classList.remove('open');
-  const badge = event?.currentTarget?.closest('.reaction-badge');
-  if (badge) {
-    badge.classList.remove('reaction-pop');
-    void badge.offsetWidth;
-    badge.classList.add('reaction-pop');
-  }
 }
 
 function sendMessage(){
@@ -838,6 +845,11 @@ function join(){
     return;
   }
 
+  if(!passwordInput.hidden){
+    if(!passwordInput.value){ passwordInput.focus(); return; }
+    roomPassword = passwordInput.value;
+    sessionStorage.setItem("lan_chat_password", roomPassword);
+  }
   username = name.slice(0,32);
   localStorage.setItem("lan_chat_username", username);
   
@@ -849,6 +861,28 @@ function join(){
 
   updateSendButton();
   connectSignaling();
+}
+
+// Show the password field only when the server asks for one.
+fetch("/config").then(r => r.json()).then(config => {
+  if(config.passwordRequired){
+    passwordInput.hidden = false;
+    passwordInput.value = roomPassword;
+  }
+}).catch(() => {});
+passwordInput.addEventListener("keydown", event => { if(event.key === "Enter") join(); });
+
+function requirePassword(){
+  joined = false;
+  roomPassword = "";
+  sessionStorage.removeItem("lan_chat_password");
+  passwordInput.hidden = false;
+  passwordInput.value = "";
+  input.disabled = true;
+  updateSendButton();
+  overlay.classList.add("show");
+  passwordInput.focus();
+  showToast("Mot de passe incorrect");
 }
 
 buildEmojiPicker();

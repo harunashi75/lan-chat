@@ -34,7 +34,7 @@ function updatePresence() {
 
 async function connectSignaling() {
   try {
-    const response = await fetch('/config');
+    const response = await fetch('/config', { headers: { 'X-Room-Password': roomPassword } });
     if (!response.ok) throw new Error('Configuration indisponible');
     const config = await response.json();
     rtcConfig = { iceServers: config.iceServers || [] };
@@ -43,6 +43,7 @@ async function connectSignaling() {
     url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('client', clientId);
     url.searchParams.set('token', sessionToken);
+    if (roomPassword) url.searchParams.set('password', roomPassword);
     const ws = new WebSocket(url);
     signalSocket = ws;
     let incoming = Promise.resolve();
@@ -55,11 +56,20 @@ async function connectSignaling() {
       incoming = incoming.then(async () => {
         const data = JSON.parse(event.data);
         if (data.type === 'signal') await handleWebRTCSignals([data]);
-        else if (data.type === 'state') await applyState(data);
+        else if (data.type === 'state' || data.type === 'users') await applyState(data);
+        else if (data.type === 'message') addMessage(data.message);
+        else if (data.type === 'reactions') applyReactions(data.msg_id, data.reactions, true);
         else if (data.type === 'error') showToast(data.error);
       }).catch(err => console.error('Signalisation', err));
     };
     ws.onclose = event => {
+      if (event.code === 4004 && signalSocket === ws) {
+        signalSocket = null;
+        transportReady = false;
+        connectionEl.textContent = 'Mot de passe requis';
+        requirePassword();
+        return;
+      }
       if ((event.code === 4001 || event.code === 4003) && signalSocket === ws) {
         // Identity taken over by another tab, or token rejected: start a fresh identity.
         clientId = crypto.randomUUID();
@@ -524,7 +534,7 @@ async function applyState(data) {
   latestUsers = data.users || [];
   latestUsersById = Object.fromEntries(latestUsers.map(u => [u.id,u]));
   renderUsers(latestUsers, data.voice_users || []);
-  renderMessages(data.messages || []);
+  if (data.messages) renderMessages(data.messages);
   const needed = new Set();
   for (const user of latestUsers) {
     if (user.id === clientId) continue;

@@ -1,6 +1,6 @@
 # LAN Chat
 
-Chat en mémoire, vocal et partage d'écran WebRTC. Le serveur Python transmet le chat, la présence et les signaux WebRTC via HTTP/WebSocket sur un seul port. Les médias circulent directement entre les participants.
+Chat en mémoire (état complet envoyé une seule fois à l'arrivée, puis des deltas : nouveau message, réactions, liste des présents), vocal et partage d'écran WebRTC. Le serveur Python transmet le chat, la présence et les signaux WebRTC via HTTP/WebSocket sur un seul port. Les médias circulent directement entre les participants.
 
 ## Démarrer
 
@@ -14,10 +14,10 @@ Linux/macOS :
 
 Windows : lancer `start.bat` avec une installation standard de Python (commande `py`). Le dossier `python/` historique n'est plus utilisé : sa distribution embarquée ne fournit pas le même environnement `venv`/`pip`.
 
-Le premier lancement prépare `.venv` et installe `requirements.txt`. Ouvrir `http://localhost:8765`. Le tunnel Pinggy est conservé ; SSH doit être installé pour obtenir le lien HTTPS public. Pour rester uniquement en local :
+Le premier lancement prépare `.venv` et installe `requirements.txt`. Ouvrir `http://localhost:8765`. Le tunnel Pinggy est désactivé par défaut : le salon reste local. Pour obtenir un lien HTTPS public (SSH requis), activez-le et protégez le salon :
 
 ```bash
-LAN_CHAT_TUNNEL=0 ./start.sh
+LAN_CHAT_TUNNEL=1 LAN_CHAT_PASSWORD='mon-mot-de-passe' ./start.sh
 ```
 
 Les invités sur le réseau doivent utiliser une URL HTTPS pour démarrer une capture ou le microphone dans un navigateur. Une adresse `http://192.168.…` ne fournit pas un contexte sécurisé. `localhost` est une exception. Le tunnel fournit HTTPS pour l'accès distant ; un reverse proxy HTTPS local est une autre possibilité.
@@ -57,7 +57,8 @@ Variables d'environnement (héritées aussi par le serveur lancé par Electron) 
 | --- | --- | --- |
 | `LAN_CHAT_HOST` | `0.0.0.0` | Interface d'écoute |
 | `LAN_CHAT_PORT` | `8765` | Port HTTP + WebSocket |
-| `LAN_CHAT_TUNNEL` | `1` | `0` désactive Pinggy |
+| `LAN_CHAT_TUNNEL` | `0` | `1` active le tunnel public Pinggy |
+| `LAN_CHAT_PASSWORD` | vide | Mot de passe du salon (optionnel, recommandé avec le tunnel) |
 | `LAN_CHAT_ICE_SERVERS` | STUN Google | Liste JSON de serveurs STUN/TURN |
 | `LAN_CHAT_VIDEO_BUDGET` | `40000000` | Budget vidéo total en bits/s, hors audio et surcoûts |
 | `LAN_CHAT_PUBLIC_ORIGINS` | vide | Origines HTTPS autorisées derrière un proxy, séparées par des virgules |
@@ -71,7 +72,7 @@ export LAN_CHAT_ICE_SERVERS='[{"urls":"stun:stun.example.net:3478"},{"urls":["tu
 
 Le serveur STUN Google conserve la découverte publique déjà utilisée par le projet. Pour un LAN sans service externe, définir `LAN_CHAT_ICE_SERVERS='[]'`. Certains réseaux nécessitent TURN. Pinggy transporte le site et la signalisation, pas les flux média WebRTC. La configuration `/config` est destinée aux navigateurs : les identifiants TURN qui y figurent sont donc visibles. Utiliser des identifiants temporaires pour une installation publique. Aucun service TURN n'est provisionné automatiquement.
 
-Chaque navigateur ouvre une session avec un jeton secret (jamais diffusé) : le chat, les réactions et les signaux passent par le WebSocket et sont attribués à l'identité authentifiée de la connexion, ce qui empêche d'écrire au nom d'un autre. Le jeton permet aussi de reprendre sa session après une coupure réseau. Le salon n'a pas de comptes ni de mot de passe. Le lien donne accès au salon ; l'application reste destinée à un groupe de confiance.
+Chaque navigateur ouvre une session avec un jeton secret (jamais diffusé) : le chat, les réactions et les signaux passent par le WebSocket et sont attribués à l'identité authentifiée de la connexion, ce qui empêche d'écrire au nom d'un autre. Le jeton permet aussi de reprendre sa session après une coupure réseau. Il n'y a pas de comptes. Sans `LAN_CHAT_PASSWORD`, le lien donne accès au salon ; avec, le mot de passe est exigé pour ouvrir le WebSocket et pour recevoir la configuration ICE (donc les identifiants TURN). Il n'y a pas de limitation de tentatives : choisissez un mot de passe long. L'application reste destinée à un groupe de confiance.
 
 ## Préparer un futur rendu vidéo / SFU
 
