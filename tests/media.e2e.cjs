@@ -15,15 +15,16 @@ const externalRequests=[];
 const pages=[];
 async function waitServer() {
   for (let i=0;i<50;i++) {
-    try { if ((await fetch(base+'/config')).ok) return; } catch {}
+    try { if ((await fetch(base+'/config')).ok) return; } catch { /* server not ready yet */ }
     await new Promise(r => setTimeout(r,100));
   }
   throw new Error(output);
 }
-async function participant(name) {
+async function participant(name, url=base) {
   const context=await browser.newContext();
   await context.addInitScript(() => {
-    navigator.mediaDevices.getDisplayMedia = async options => {
+    // navigator.mediaDevices does not exist on insecure (plain http, non-localhost) pages.
+    if (navigator.mediaDevices) navigator.mediaDevices.getDisplayMedia = async options => {
       const canvas=document.createElement('canvas');
       canvas.width=1280; canvas.height=720;
       const ctx=canvas.getContext('2d'); let n=0;
@@ -51,10 +52,13 @@ async function participant(name) {
   page.on('pageerror',error => errors.push(error.message));
   page.on('console',msg => {if(msg.type()==='error') errors.push(msg.text());});
   page.on('request',request => {if(request.url().includes('gstatic.com')) externalRequests.push(request.url());});
-  await page.goto(base);
+  await page.goto(url);
   await page.fill('#nameInput',name);await page.click('#joinButton');
   await page.waitForFunction(() => __lanChat.ready && __lanChat.users.length>0);
   return page;
+}
+async function openSettings(page) {
+  if (!(await page.locator('#settingsBox.open').count())) await page.click('#settingsToggle');
 }
 async function remoteVideo(page, expected=1) {
   await page.waitForFunction(count => [...document.querySelectorAll('.screen-tile video')].filter(v =>
@@ -63,7 +67,7 @@ async function remoteVideo(page, expected=1) {
 (async () => {
 try {
   await waitServer();
-  browser=await chromium.launch({headless:true,args:['--disable-features=WebRtcHideLocalIpsWithMdns','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
+  browser=await chromium.launch({headless:true,args:['--disable-features=WebRtcHideLocalIpsWithMdns','--host-resolver-rules=MAP lan.test 127.0.0.1','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
   const alice=await participant('Alice');const bob=await participant('Bob');
   await alice.waitForFunction(() => __lanChat.users.length===2);
   await alice.fill('#messageInput','Bonjour WebSocket');await alice.click('#sendButton');
@@ -72,7 +76,7 @@ try {
   await alice.fill('#messageInput','😀');await alice.click('#sendButton');
   await bob.waitForFunction(() => document.querySelector('.noto-emoji-fallback'));
   assert.deepEqual(externalRequests,[],'No request to Google by default');
-  await bob.click('#settingsToggle');await bob.check('#animatedEmoji');
+  await openSettings(bob);await bob.check('#animatedEmoji');
   await bob.waitForFunction(() => document.querySelector('img.noto-animated-emoji'));
   await bob.uncheck('#animatedEmoji');
   await bob.waitForFunction(() => !document.querySelector('img.noto-animated-emoji'));
@@ -82,7 +86,7 @@ try {
   await alice.waitForSelector('.reaction-badge.active', {state:'attached', timeout:3000}).then(() => {throw new Error('Alice must not see her own active badge');}, () => {});
   await alice.waitForFunction(() => document.querySelector('.reaction-badge')?.textContent.includes('1'));
   // Renaming propagates to everyone.
-  await bob.click('#settingsToggle');await bob.fill('#renameInput','Robert');await bob.click('#renameButton');
+  await openSettings(bob);await bob.fill('#renameInput','Robert');await bob.click('#renameButton');
   await alice.waitForFunction(() => document.getElementById('users').textContent.includes('Robert'));
   await alice.check('#shareAudio');await alice.click('#screenShareBtn');await remoteVideo(bob);
   await bob.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].some(a => a.dataset.kind==='screen' && !a.muted));
@@ -114,6 +118,11 @@ try {
   // Late joiner receives an already active screen without joining voice.
   const charlie=await participant('Charlie');await remoteVideo(charlie);
   await charlie.close();
+  // A guest on plain http://<lan host> has no secure context: crypto.randomUUID is missing there.
+  const dave=await participant('Dave','http://lan.test:18765');
+  assert.equal(await dave.evaluate(() => window.isSecureContext),false);
+  await dave.waitForFunction(() => document.getElementById('messages').textContent.includes('Bonjour WebSocket'));
+  await dave.close();
   await alice.click('#screenShareBtn');
   assert.deepEqual(errors,[],'Browser errors');
   console.log('PASS: chat, real WebRTC video/audio, simultaneous sharing, profiles, voice isolation, receive toggle, stop/restart, reconnect, departure and late join');

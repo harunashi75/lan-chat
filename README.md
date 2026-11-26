@@ -4,7 +4,7 @@ Chat en mémoire (état complet envoyé une seule fois à l'arrivée, puis des d
 
 ## Démarrer
 
-Prérequis : Python 3.10+ avec `venv` et `pip`. Pour Electron : Node.js 22.12+ et npm.
+Prérequis : Python 3.11+ avec `venv` et `pip`. Pour Electron : Node.js 22.12+ et npm.
 
 Linux/macOS :
 
@@ -12,7 +12,7 @@ Linux/macOS :
 ./start.sh
 ```
 
-Windows : lancer `start.bat` avec une installation standard de Python (commande `py`). Le dossier `python/` historique n'est plus utilisé : sa distribution embarquée ne fournit pas le même environnement `venv`/`pip`.
+Windows : lancer `start.bat` avec une installation standard de Python (commande `py`).
 
 Le premier lancement prépare `.venv` et installe `requirements.txt`. Ouvrir `http://localhost:8765`. Le tunnel Pinggy est désactivé par défaut : le salon reste local. Pour obtenir un lien HTTPS public (SSH requis), activez-le et protégez le salon :
 
@@ -86,14 +86,18 @@ Le projet utilise toujours une connexion média par participant concerné. Un SF
 ## Vérifier
 
 ```bash
-.venv/bin/python -m unittest discover -s tests -v
+npm ci
+.venv/bin/pip install -r requirements-dev.txt   # ruff
 npx playwright install chromium
-npm run test:media
+npm run lint         # eslint (front, Electron, tests) + ruff (Python)
+npm run test:server  # tests unittest du serveur
+npm run test:media   # test navigateur de bout en bout
+npm test             # les deux tests
 ```
 
-Sous Windows, utiliser `.venv\Scripts\python.exe` pour les tests Python.
+Les scripts npm passent par `scripts/venv-python.cjs`, ils fonctionnent donc aussi sous Windows. Une CI GitHub (`.github/workflows/ci.yml`) lance ruff et les tests serveur sous Python 3.11 et 3.13, puis eslint et le test navigateur.
 
-Les tests serveur vérifient présence, routage des signaux, chat et réactions (stockées par identifiant) par WebSocket, départs, protection des identités par jeton, reprise de session et origines. Le test navigateur utilise deux puis trois clients avec de vrais échanges WebRTC, une capture canvas et du son synthétiques : réception vidéo, partage bidirectionnel, changement de profil, vocal, isolation audio, désabonnement, arrêt/reprise, reconnexion et arrivée tardive. L'option désactivant mDNS est limitée au navigateur de test pour les environnements sans résolution multicast.
+Les tests serveur vérifient présence, routage des signaux, chat et réactions (stockées par identifiant) par WebSocket, départs, protection des identités par jeton, reprise de session et origines. Le test navigateur utilise deux à quatre clients (dont un invité sur une page `http://` non sécurisée, sans `crypto.randomUUID`) avec de vrais échanges WebRTC, une capture canvas et du son synthétiques : réception vidéo, partage bidirectionnel, changement de profil, vocal, isolation audio, désabonnement, arrêt/reprise, reconnexion et arrivée tardive. L'option désactivant mDNS est limitée au navigateur de test pour les environnements sans résolution multicast.
 
 La capture réelle d'écran, le sélecteur Electron, le son système et l'accélération matérielle doivent être validés sur les machines cibles. Pour comparer les performances : même contenu, même résolution, même durée, relever CPU/GPU et diagnostic reçu sur une autre machine, en Ethernet puis en Wi-Fi. Le test synthétique ne mesure pas les performances 1080p60 d'un poste réel.
 

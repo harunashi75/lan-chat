@@ -107,7 +107,7 @@ async function startServer() {
     try {
       const response = await fetch(`${address}/config`, {signal:AbortSignal.timeout(500)});
       if (response.ok) return address;
-    } catch {}
+    } catch { /* serveur pas encore prêt */ }
     await new Promise(resolve => setTimeout(resolve,200));
   }
   throw new Error('Le serveur ne répond pas.');

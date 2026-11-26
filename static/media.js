@@ -129,7 +129,7 @@ async function collectDiagnostics() {
     $('metricContext').textContent = primary
       ? `${primary.outgoing ? 'Envoyé à' : 'Reçu de'} ${latestUsersById[primary.cid]?.name || 'Participant'}`
       : 'En attente d’un échange vidéo';
-    for (const [cid, stream] of Object.entries(remoteScreenStreams)) {
+    for (const cid of Object.keys(remoteScreenStreams)) {
       const m = measurements.find(item => item.cid === cid && !item.outgoing && item.width);
       const badge = document.getElementById(`screen-quality-${cid}`);
       if (badge) badge.textContent = m ? `Reçu · ${m.width} × ${m.height} · ${Math.round(m.fps || 0)} ips` : 'Réception · mesure en cours';

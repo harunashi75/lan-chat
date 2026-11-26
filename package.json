@@ -5,10 +5,14 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test:media": "node tests/media.e2e.cjs",
-    "test:server": ".venv/bin/python -m unittest discover -s tests -v",
+    "start:wayland": "electron . --disable-features=WaylandWpColorManagerV1",
     "install:desktop": "install-electron",
-    "start:wayland": "electron . --disable-features=WaylandWpColorManagerV1"
+    "test": "npm run test:server && npm run test:media",
+    "test:server": "node scripts/venv-python.cjs -m unittest discover -s tests -v",
+    "test:media": "node tests/media.e2e.cjs",
+    "lint": "npm run lint:js && npm run lint:py",
+    "lint:js": "eslint .",
+    "lint:py": "node scripts/venv-python.cjs -m ruff check ."
   },
   "keywords": [],
   "type": "commonjs",
@@ -16,7 +20,14 @@
     "electron-store": "^11.0.2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "electron": "^45.2.3",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
     "playwright": "^1.65.0"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22.12"
   }
 }

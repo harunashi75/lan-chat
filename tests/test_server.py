@@ -2,8 +2,10 @@ import asyncio
 import json
 import os
 import unittest
-from aiohttp.test_utils import AioHTTPTestCase
+
 from aiohttp import WSMsgType
+from aiohttp.test_utils import AioHTTPTestCase
+
 from server import Client, Room, create_app
 
 

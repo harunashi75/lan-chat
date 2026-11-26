@@ -4,14 +4,14 @@ import asyncio
 import hmac
 import json
 import os
-from pathlib import Path
 import socket
 import subprocess
 import time
 import urllib.request
 import uuid
+from pathlib import Path
 
-from aiohttp import web, WSMsgType
+from aiohttp import WSMsgType, web
 
 ROOM_KEY = web.AppKey("room", object)
 RTC_KEY = web.AppKey("rtc_config", dict)
@@ -93,7 +93,7 @@ class Client:
         try:
             while True:
                 await asyncio.wait_for(self.ws.send_str(await self.queue.get()), SEND_TIMEOUT)
-        except (ConnectionError, RuntimeError, asyncio.TimeoutError):
+        except (TimeoutError, ConnectionError, RuntimeError):
             await self.ws.close()
 
     def stop(self):
@@ -286,7 +286,8 @@ async def websocket(request):
 
 
 async def cleanup(app):
-    await asyncio.gather(*(client.ws.close(code=1001, message=b'Server shutdown') for client in list(app[ROOM_KEY].sockets.values())))
+    clients = list(app[ROOM_KEY].sockets.values())
+    await asyncio.gather(*(client.ws.close(code=1001, message=b'Server shutdown') for client in clients))
 
 
 async def no_store_static(request, response):
@@ -300,7 +301,8 @@ def create_app():
     app[ROOM_KEY] = Room()
     app[RTC_KEY] = load_rtc_config()
     app[PASSWORD_KEY] = os.environ.get('LAN_CHAT_PASSWORD', '')
-    app[ORIGINS_KEY] = {value.strip().rstrip('/') for value in os.environ.get('LAN_CHAT_PUBLIC_ORIGINS', '').split(',') if value.strip()}
+    origins = os.environ.get('LAN_CHAT_PUBLIC_ORIGINS', '').split(',')
+    app[ORIGINS_KEY] = {value.strip().rstrip('/') for value in origins if value.strip()}
     app.router.add_get('/', index)
     app.router.add_get('/config', config)
     app.router.add_static('/static', BASE_DIR / 'static')

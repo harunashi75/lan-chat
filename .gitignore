@@ -10,3 +10,4 @@ python/
 .DS_Store
 playwright-report/
 test-results/
+.ruff_cache/
