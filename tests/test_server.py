@@ -162,8 +162,8 @@ class SignalingTests(AioHTTPTestCase):
 
 
     async def test_config_assets_and_presence_changes(self):
-        static = ('app.js', 'session.js', 'settings.js', 'emoji.js', 'util.js', 'media/index.js', 'media/peers.js',
-                  'style.css', 'icon.svg')
+        static = ('app.js', 'session.js', 'settings.js', 'emoji.js', 'util.js', 'media/index.js',
+                  'media/peers.js', 'chat/messages.js', 'style.css', 'icon.svg')
         for route in ('/', '/config', *('/static/' + name for name in static)):
             response = await self.client.get(route)
             self.assertEqual(response.status, 200)
