@@ -120,6 +120,10 @@ button{border:0;cursor:pointer}
 .settings-content-inner{overflow:hidden}
 .settings-box.open .settings-content{grid-template-rows:1fr}
 .settings-item{margin:0 7px 7px;border:1px solid var(--border);border-radius:13px;background:var(--panel-solid)}
+.rename-item{display:flex;gap:6px;padding:6px}
+.rename-input{flex:1;min-width:0;height:34px;border:1px solid var(--border);border-radius:10px;padding:0 10px;outline:0;background:var(--input-bg);color:var(--text);font-size:12px}
+.rename-input:focus{border-color:var(--blue)}
+.rename-button{padding:0 12px;border-radius:10px;background:var(--blue);color:#fff;font-size:12px;font-weight:700}
 .settings-version{text-align:center;font-size:10px;color:var(--muted);padding:2px 8px 9px}
 
 .main{
@@ -402,6 +406,10 @@ textarea::placeholder{color:var(--muted)}
                 <span id="themeIcon">🌙</span> <span id="themeText">Mode sombre</span>
               </button>
             </div>
+            <div class="settings-item rename-item">
+              <input class="rename-input" id="renameInput" maxlength="32" placeholder="Nom affiché" autocomplete="off" aria-label="Nom affiché">
+              <button class="rename-button" id="renameButton" type="button">OK</button>
+            </div>
             <div class="settings-version">LAN Chat · version 1.0</div>
           </div>
         </div>
@@ -514,7 +522,19 @@ themeToggle.addEventListener("click", () => {
 
 settingsToggle.addEventListener("click", () => {
   settingsBox.classList.toggle("open");
+  if (settingsBox.classList.contains("open")) $("renameInput").value = username;
 });
+
+function renameSelf(){
+  const name = $("renameInput").value.trim().slice(0,32);
+  if(!name || !joined) return;
+  username = name;
+  localStorage.setItem("lan_chat_username", username);
+  updatePresence();
+  showToast("Nom mis à jour");
+}
+$("renameButton").addEventListener("click", renameSelf);
+$("renameInput").addEventListener("keydown", event => { if(event.key === "Enter") renameSelf(); });
 
 const emojiData = {
   smileys:["😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","🥸","😏","😒","😞","😔","😟","😕","🙁","☹️","😣","😖","😫","😩","🥺","😢","😭","😤","😠","😡","🤬","🤯","😳","🥵","🥶","😱","😨","😰","😥","😓","🤗","🤔","🫡","🤭","🫢","🫣","🤫","🫠","🫥","😶","😶‍🌫️","😐","😑","🫤","🙄","😬","😮","😯","😲","🥱","😴","🤤","😪","😵","😵‍💫","🤐","🥴","🤢","🤮","🤧","😷","🤒","🤕","🤑","🤠","😈","👿","💀","☠️","👻","👽","🤖","💩"],
@@ -681,13 +701,14 @@ function applyReactions(msgId, reactions, animate){
   const previous = entry.reactions || {};
   const bar = entry.row.querySelector(".reactions-bar");
   bar.textContent = "";
-  for (const [emoji, names] of Object.entries(reactions || {})) {
+  for (const [emoji, ids] of Object.entries(reactions || {})) {
     const badge = document.createElement("div");
-    badge.className = "reaction-badge" + (names.includes(username) ? " active" : "");
+    badge.className = "reaction-badge" + (ids.includes(clientId) ? " active" : "");
+    badge.title = ids.map(id => latestUsersById[id]?.name || "Ancien participant").join(", ");
     badge.dataset.reaction = emoji;
-    badge.innerHTML = `<span>${escapeHtml(emoji)}</span><span>${names.length}</span>`;
+    badge.innerHTML = `<span>${escapeHtml(emoji)}</span><span>${ids.length}</span>`;
     badge.addEventListener("click", event => toggleReaction(event, msgId, emoji));
-    if (animate && (previous[emoji]?.length || 0) !== names.length) badge.classList.add("reaction-pop");
+    if (animate && (previous[emoji]?.length || 0) !== ids.length) badge.classList.add("reaction-pop");
     bar.appendChild(badge);
   }
   entry.reactions = reactions || {};

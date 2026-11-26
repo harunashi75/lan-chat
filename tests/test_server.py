@@ -101,10 +101,25 @@ class SignalingTests(AioHTTPTestCase):
         self.assertEqual((await ws.receive_json())['type'], 'state')
         await ws.send_json({'type': 'message', 'text': '   '})
         await self.delta(ws, 'error')
-        await ws.send_json({'type': 'update_profile', 'name': 'Robert'})
+        await ws.send_json({'type': 'presence', 'name': 'Robert'})
         state = await self.state_with(ws, lambda d: d['users'][0]['name'] == 'Robert')
         self.assertEqual(state['users'][0]['id'], 'bob')
         await ws.close()
+
+    async def test_reactions_use_ids_and_survive_renames(self):
+        alice = await self.connect('alice')
+        bob = await self.connect('bob')
+        await alice.send_json({'type': 'message', 'text': 'hi'})
+        mid = (await self.delta(bob, 'message'))['message']['msg_id']
+        # A homonym of alice must not cancel her reaction.
+        await alice.send_json({'type': 'react', 'msg_id': mid, 'emoji': '👍'})
+        await self.delta(bob, 'reactions')
+        await bob.send_json({'type': 'presence', 'name': 'alice'})
+        await bob.send_json({'type': 'react', 'msg_id': mid, 'emoji': '👍'})
+        delta = await self.delta(bob, 'reactions')
+        self.assertEqual(delta['reactions'], {'👍': ['alice', 'bob']})
+        await alice.close()
+        await bob.close()
 
     async def test_joiner_gets_snapshot_then_only_deltas(self):
         alice = await self.connect('alice')

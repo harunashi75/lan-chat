@@ -93,7 +93,7 @@ npm run test:media
 
 Sous Windows, utiliser `.venv\Scripts\python.exe` pour les tests Python.
 
-Les tests serveur vérifient présence, routage des signaux, chat et réactions par WebSocket, départs, protection des identités par jeton, reprise de session et origines. Le test navigateur utilise deux puis trois clients avec de vrais échanges WebRTC, une capture canvas et du son synthétiques : réception vidéo, partage bidirectionnel, changement de profil, vocal, isolation audio, désabonnement, arrêt/reprise, reconnexion et arrivée tardive. L'option désactivant mDNS est limitée au navigateur de test pour les environnements sans résolution multicast.
+Les tests serveur vérifient présence, routage des signaux, chat et réactions (stockées par identifiant) par WebSocket, départs, protection des identités par jeton, reprise de session et origines. Le test navigateur utilise deux puis trois clients avec de vrais échanges WebRTC, une capture canvas et du son synthétiques : réception vidéo, partage bidirectionnel, changement de profil, vocal, isolation audio, désabonnement, arrêt/reprise, reconnexion et arrivée tardive. L'option désactivant mDNS est limitée au navigateur de test pour les environnements sans résolution multicast.
 
 La capture réelle d'écran, le sélecteur Electron, le son système et l'accélération matérielle doivent être validés sur les machines cibles. Pour comparer les performances : même contenu, même résolution, même durée, relever CPU/GPU et diagnostic reçu sur une autre machine, en Ethernet puis en Wi-Fi. Le test synthétique ne mesure pas les performances 1080p60 d'un poste réel.
 

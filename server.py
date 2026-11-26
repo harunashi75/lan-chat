@@ -154,18 +154,16 @@ async def handle_chat(room, cid, data):
         for msg in room.messages:
             if msg['msg_id'] == data.get('msg_id'):
                 names = msg['reactions'].setdefault(emoji, [])
-                if user['name'] in names:
-                    names.remove(user['name'])
+                # Reactions are stored by client id so homonyms and renames stay correct.
+                if cid in names:
+                    names.remove(cid)
                 else:
-                    names.append(user['name'])
+                    names.append(cid)
                 if not names:
                     del msg['reactions'][emoji]
                 await room.broadcast({'type': 'reactions', 'msg_id': msg['msg_id'], 'reactions': msg['reactions']})
                 break
         return
-    elif kind == 'update_profile':
-        user['name'] = clean_name(data.get('name'), user['name'])
-        await room.broadcast()
 
 
 async def websocket(request):
@@ -208,7 +206,7 @@ async def websocket(request):
                     raise ValueError('Rejoignez le salon')
                 elif kind == 'signal':
                     await handle_signal(room, ws, cid, data)
-                elif kind in ('message', 'react', 'update_profile'):
+                elif kind in ('message', 'react'):
                     await handle_chat(room, cid, data)
                 else:
                     raise ValueError('Type inconnu')
