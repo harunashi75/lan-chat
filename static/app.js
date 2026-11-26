@@ -4,7 +4,7 @@ import { on, getClientId, getSocket, isReady } from "./session.js";
 import { initMedia, mediaDebug } from "./media/index.js";
 import { initSettings } from "./settings.js";
 import { setConnection } from "./chat/connection.js";
-import { renderUsers, getUsers } from "./chat/users.js";
+import { renderUsers, getUsers, initUsers } from "./chat/users.js";
 import { initMessages, addMessage, renderMessages, applyReactions, isAnimatedEmoji, setAnimatedEmoji } from "./chat/messages.js";
 import { initComposer } from "./chat/composer.js";
 import { initJoin, isJoined, requirePassword } from "./chat/join.js";
@@ -36,6 +36,7 @@ on("error", data => showToast(data.error));
 on("status", text => setConnection(text, "warn"));
 on("needpassword", requirePassword);
 
+initUsers();
 initMessages();
 initNotifications();
 initComposer();

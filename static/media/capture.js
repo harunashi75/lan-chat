@@ -6,6 +6,8 @@ import { addOrUpdateScreenTile, removeScreenTile } from './tiles.js';
 import { selectedProfile } from './profiles.js';
 import { syncPresence } from './peers.js';
 import { watchStream, unwatch } from './activity.js';
+import { applyPlayback } from './volume.js';
+import { playVoiceCue } from '../sounds.js';
 
 export async function toggleVoiceChannel() {
   if (!isReady()) { showToast("Attendez la connexion au salon"); return; }
@@ -13,7 +15,10 @@ export async function toggleVoiceChannel() {
     try {
       media.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       media.inVoice = true;
+      media.muted = false;
       watchStream(getClientId(), media.localStream);
+      $("muteBtn").hidden = false;
+      renderMuteButton();
       $("voiceToggleBtn").classList.add("active");
       $("voiceBtnText").textContent = "Quitter le vocal";
       showToast("Connecté au canal vocal 🎙️");
@@ -29,8 +34,28 @@ export async function toggleVoiceChannel() {
   syncPresence();
 }
 
+// Cut or restore our microphone. The track stays open but sends silence, so others see us muted at once.
+export function toggleMute() {
+  if (!media.inVoice || !media.localStream) return;
+  media.muted = !media.muted;
+  media.localStream.getAudioTracks().forEach(track => { track.enabled = !media.muted; });
+  renderMuteButton();
+  playVoiceCue(media.muted ? "mute" : "unmute");
+  syncPresence();
+}
+
+function renderMuteButton() {
+  const button = $("muteBtn");
+  button.classList.toggle("active", media.muted);
+  button.setAttribute("aria-pressed", String(media.muted));
+  $("muteBtnText").textContent = media.muted ? "Micro coupé · réactiver" : "Couper mon micro";
+  $("muteBtnIcon").textContent = media.muted ? "🔇" : "🎙️";
+}
+
 export async function leaveVoice() {
   media.inVoice = false;
+  media.muted = false;
+  $("muteBtn").hidden = true;
   unwatch(getClientId());
 
   if (media.localStream) {
@@ -38,7 +63,11 @@ export async function leaveVoice() {
     media.localStream = null;
   }
 
-  document.querySelectorAll('#audioContainer audio').forEach(audio => { if (audio.dataset.kind === "microphone") audio.muted = true; });
+  document.querySelectorAll('#audioContainer audio').forEach(audio => {
+    if (audio.dataset.kind !== "microphone") return;
+    audio.dataset.roomMuted = "1";
+    applyPlayback(audio);
+  });
   $("voiceToggleBtn").classList.remove("active");
   $("voiceBtnText").textContent = "Rejoindre le vocal";
   showToast("Déconnecté du vocal");

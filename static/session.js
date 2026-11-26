@@ -30,7 +30,7 @@ let clientId = stored("lan_chat_client_id");
 let token = stored("lan_chat_token");
 let password = sessionStorage.getItem("lan_chat_password") || "";
 let name = localStorage.getItem("lan_chat_username") || "";
-const presence = { in_voice: false, sharing_screen: false, receive_screens: true };
+const presence = { in_voice: false, muted: false, sharing_screen: false, receive_screens: true };
 
 let socket = null;
 let ready = false;

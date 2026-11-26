@@ -81,8 +81,8 @@ class Room:
 
     def users_payload(self):
         users = list(self.users.values())
-        return {'type': 'users', 'users': users,
-                'voice_users': [{'id': u['id'], 'name': u['name']} for u in users if u['in_voice']],
+        voice = [{'id': u['id'], 'name': u['name'], 'muted': u['muted']} for u in users if u['in_voice']]
+        return {'type': 'users', 'users': users, 'voice_users': voice,
                 'screen_users': [{'id': u['id'], 'name': u['name']} for u in users if u['sharing_screen']]}
 
     def snapshot(self):

@@ -14,6 +14,7 @@ def clean_name(value, fallback):
 def handle_presence(room, client, cid, data, first):
     user = {'id': cid, 'name': clean_name(data.get('name'), 'Utilisateur'),
             'pc': 'Navigateur', 'in_voice': data.get('in_voice') is True,
+            'muted': data.get('in_voice') is True and data.get('muted') is True,  # mic cut: only meaningful in voice
             'sharing_screen': data.get('sharing_screen') is True,
             'receive_screens': data.get('receive_screens', True) is True}
     changed = room.users.get(cid) != user

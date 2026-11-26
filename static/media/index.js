@@ -5,12 +5,13 @@ import { media, peerConnections, remoteScreenStreams } from './state.js';
 import { VIDEO_PROFILES, changeVideoProfile } from './profiles.js';
 import { initTiles } from './tiles.js';
 import { initPeers, closeAllPeers, handleWebRTCSignals, applyState, syncPresence } from './peers.js';
-import { toggleVoiceChannel, toggleScreenShare } from './capture.js';
+import { toggleVoiceChannel, toggleScreenShare, toggleMute } from './capture.js';
+import { initVolume } from './volume.js';
 import { initDiagnostics } from './diagnostics.js';
 
 // Read-only access to live objects, used by the end-to-end browser test.
 export function mediaDebug() {
-  return { peerConnections, remoteScreenStreams, screenVideoTrack: media.screenVideoTrack };
+  return { peerConnections, remoteScreenStreams, screenVideoTrack: media.screenVideoTrack, localStream: media.localStream };
 }
 
 function cleanup() {
@@ -27,12 +28,14 @@ export function initMedia() {
 
   $('voiceToggleBtn').addEventListener('click', toggleVoiceChannel);
   $('screenShareBtn').addEventListener('click', toggleScreenShare);
+  $('muteBtn').addEventListener('click', toggleMute);
   $('videoProfile').addEventListener('change', changeVideoProfile);
   $('receiveScreens').addEventListener('change', syncPresence);
 
   const savedProfile = localStorage.getItem('lan_video_profile');
   if (VIDEO_PROFILES[savedProfile]) $('videoProfile').value = savedProfile;
 
+  initVolume();
   initTiles();
   initPeers();
   initDiagnostics();

@@ -5,6 +5,13 @@ import { media, peerConnections, peerState, previousStats } from './state.js';
 import { addOrUpdateScreenTile, removeScreenTile } from './tiles.js';
 import { configureVideoSender } from './profiles.js';
 import { watchStream, unwatch } from './activity.js';
+import { applyPlayback, releaseAudio } from './volume.js';
+
+// Remove an audio output and free its volume-boost graph, if any.
+export function removeAudio(audio) {
+  releaseAudio(audio);
+  audio.remove();
+}
 
 export function closePeer(cid) {
   const pc = peerConnections[cid];
@@ -13,7 +20,7 @@ export function closePeer(cid) {
   delete peerState[cid];
   previousStats.delete(cid);
   document.querySelectorAll('#audioContainer audio').forEach(audio => {
-    if (audio.dataset.peer === cid) audio.remove();
+    if (audio.dataset.peer === cid) removeAudio(audio);
   });
   unwatch(cid);
   removeScreenTile(cid);
@@ -108,10 +115,10 @@ export function createPeerConnection(cid) {
       }
       audio.dataset.kind = peerState[cid]?.remoteMedia?.microphone === stream.id ? 'microphone' : 'screen';
       audio.srcObject = new MediaStream([track]);
-      stream.addEventListener('removetrack', event => { if (event.track === track) audio.remove(); });
+      stream.addEventListener('removetrack', event => { if (event.track === track) removeAudio(audio); });
       updateRemoteAudio(cid);
       audio.play().catch(() => showToast('Cliquez dans le salon pour autoriser le son'));
-      track.onended = () => { audio.remove(); unwatch(cid); };
+      track.onended = () => { removeAudio(audio); unwatch(cid); };
       if (audio.dataset.kind === 'microphone') watchStream(cid, new MediaStream([track]));
     }
   };
@@ -127,15 +134,22 @@ export function updateRemoteAudio(cid) {
   const user = media.usersById[cid];
   document.querySelectorAll('#audioContainer audio').forEach(audio => {
     if (audio.dataset.peer !== cid) return;
-    audio.muted = audio.dataset.kind === 'microphone'
-      ? !(media.inVoice && user?.in_voice)
-      : !($('receiveScreens').checked && user?.sharing_screen);
+    if (audio.dataset.kind === 'microphone') {
+      // Room rule here; the user's own volume and mute choices are applied on top (volume.js).
+      audio.dataset.roomMuted = media.inVoice && user?.in_voice ? '0' : '1';
+      applyPlayback(audio);
+    } else {
+      audio.muted = !($('receiveScreens').checked && user?.sharing_screen);
+    }
   });
 }
 
 export function syncPresence() {
   Object.keys(peerConnections).forEach(updateRemoteAudio);
-  updatePresence({ in_voice:media.inVoice, sharing_screen:!!media.screenStream, receive_screens:$('receiveScreens').checked });
+  updatePresence({
+    in_voice: media.inVoice, muted: media.inVoice && media.muted,
+    sharing_screen: !!media.screenStream, receive_screens: $('receiveScreens').checked
+  });
 }
 
 export async function applyState(data) {
@@ -157,7 +171,7 @@ export async function applyState(data) {
   // Also drop outputs of streams that went inactive without a remote 'ended' event.
   document.querySelectorAll('#audioContainer audio').forEach(audio => {
     const user = media.usersById[audio.dataset.peer];
-    if (!user || (!user.in_voice && !user.sharing_screen)) audio.remove();
+    if (!user || (!user.in_voice && !user.sharing_screen)) removeAudio(audio);
   });
 }
 
@@ -169,7 +183,7 @@ export function closeAllPeers() {
 export function initPeers() {
   document.addEventListener('click', () => {
     document.querySelectorAll('#audioContainer audio').forEach(audio => {
-      if (!audio.muted && audio.paused) audio.play().catch(() => {});
+      if (audio.paused) audio.play().catch(() => {});
     });
   });
 }

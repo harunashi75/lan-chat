@@ -12,7 +12,9 @@ export function audioContext() {
 const SOUNDS = {
   message: [[880, 0, 0.09], [1175, 0.09, 0.16]],
   voiceJoin: [[523, 0, 0.09], [784, 0.09, 0.18]],
-  voiceLeave: [[784, 0, 0.09], [523, 0.09, 0.18]]
+  voiceLeave: [[784, 0, 0.09], [523, 0.09, 0.18]],
+  mute: [[660, 0, 0.07], [440, 0.07, 0.12]],
+  unmute: [[440, 0, 0.07], [660, 0.07, 0.12]]
 };
 const MAX_GAIN = 0.22; // keeps the loudest setting discreet
 
@@ -37,4 +39,18 @@ export function playSound(name, volume) {
   } catch {
     // Audio can be blocked until the user interacts with the page: stay silent.
   }
+}
+
+// ---- User preferences (edited in Settings > Notifications) ----
+export const SOUND_PREFS = {
+  messages: "lan_chat_sound_messages",
+  voice: "lan_chat_sound_voice",
+  volume: "lan_chat_sound_volume"
+};
+export const soundEnabled = (key, fallback = true) => (localStorage.getItem(key) ?? (fallback ? "1" : "0")) === "1";
+export const soundVolume = () => Number(localStorage.getItem(SOUND_PREFS.volume) ?? 60) / 100;
+
+// A voice-channel cue, played only if the user left voice sounds on.
+export function playVoiceCue(name) {
+  if (soundEnabled(SOUND_PREFS.voice)) playSound(name, soundVolume());
 }

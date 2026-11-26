@@ -2,6 +2,7 @@
 // so every module sees the same data through its import.
 export const media = {
   inVoice: false,
+  muted: false,             // microphone cut by us (the track stays open but sends silence)
   localStream: null,        // microphone
   screenStream: null,       // our screen capture
   screenVideoTrack: null,

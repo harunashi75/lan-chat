@@ -2,18 +2,9 @@
 // shown in the tab title and favicon while the window is in the background.
 import { $ } from "../util.js";
 import { getClientId } from "../session.js";
-import { playSound } from "../sounds.js";
+import { playSound, SOUND_PREFS as PREFS, soundEnabled as flag, soundVolume as volume } from "../sounds.js";
 
 const BASE_TITLE = "LAN Chat";
-const PREFS = {
-  messages: "lan_chat_sound_messages",
-  voice: "lan_chat_sound_voice",
-  volume: "lan_chat_sound_volume"
-};
-
-const flag = (key, fallback = true) => (localStorage.getItem(key) ?? (fallback ? "1" : "0")) === "1";
-const volume = () => Number(localStorage.getItem(PREFS.volume) ?? 60) / 100;
-
 let unread = 0;
 let previousVoice = null; // ids in the voice channel at the last update; null until the first snapshot
 const faviconLink = () => document.querySelector('link[rel="icon"]');

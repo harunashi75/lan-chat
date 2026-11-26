@@ -162,6 +162,36 @@ try {
   await alice.waitForSelector(`#users .avatar.speaking[data-user-id="${aliceId}"]`,{timeout:15000});
   await alice.waitForSelector(`#users .avatar.speaking[data-user-id="${bobId}"]`,{timeout:15000});
   assert.match(await alice.evaluate(() => getComputedStyle(document.querySelector('#users .avatar.speaking')).boxShadow),/22, 131, 255/);
+  // Cutting our microphone: others see it at once, our ring goes quiet and the track is disabled.
+  await alice.click('#muteBtn');
+  await alice.waitForFunction(() => document.getElementById('muteBtnText').textContent.includes('réactiver'));
+  assert.equal(await alice.evaluate(() => __lanChat.media.localStream.getAudioTracks()[0].enabled),false);
+  await bob.waitForSelector(`#voiceMembers [data-member="${aliceId}"] .voice-member-mic.is-muted`,{timeout:5000});
+  await bob.waitForSelector(`#users .voice-badge.is-muted`);
+  await alice.waitForFunction(id => !document.querySelector(`#users .avatar.speaking[data-user-id="${id}"]`),aliceId,{timeout:5000});
+  await alice.waitForTimeout(2500);
+  assert.equal(await alice.locator(`#users .avatar.speaking[data-user-id="${aliceId}"]`).count(),0,'a muted microphone must not light the ring');
+  await alice.click('#muteBtn');
+  await bob.waitForSelector(`#voiceMembers [data-member="${aliceId}"] .voice-member-mic:not(.is-muted)`,{timeout:5000});
+  assert.equal(await alice.evaluate(() => __lanChat.media.localStream.getAudioTracks()[0].enabled),true);
+  // Our own volume and mute for one person: below 100% through the element, above through a gain node.
+  const aliceAudio = `#audioContainer audio[data-peer="${aliceId}"][data-kind="microphone"]`;
+  await bob.click(`#voiceMembers [data-adjust="${aliceId}"]`);
+  const setVolume = percent => bob.evaluate(([id,value]) => {
+    const slider = document.querySelector(`[data-volume="${id}"]`);
+    slider.value = value; slider.dispatchEvent(new Event('input',{bubbles:true}));
+  },[aliceId,percent]);
+  await setVolume(50);
+  assert.equal(await bob.evaluate(sel => document.querySelector(sel).volume,aliceAudio),0.5);
+  assert.equal(await bob.evaluate(sel => document.querySelector(sel).muted,aliceAudio),false);
+  await setVolume(150);
+  assert.equal(await bob.evaluate(sel => document.querySelector(sel)._boost.gain.gain.value,aliceAudio),1.5);
+  assert.equal(await bob.evaluate(sel => document.querySelector(sel).muted,aliceAudio),true,'boosted audio plays through the gain node only');
+  await bob.click(`[data-mute="${aliceId}"]`);
+  assert.equal(await bob.evaluate(sel => document.querySelector(sel)._boost.gain.gain.value,aliceAudio),0);
+  await bob.click(`[data-mute="${aliceId}"]`);
+  await setVolume(100);
+  assert.deepEqual(await bob.evaluate(sel => { const a = document.querySelector(sel); return [a.muted, a.volume, Boolean(a._boost)]; },aliceAudio),[false,1,false]);
   await alice.click('#voiceToggleBtn');
   await alice.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].filter(a => !a.muted).length===1);
   await alice.waitForFunction(id => !document.querySelector(`#users .avatar.speaking[data-user-id="${id}"]`),aliceId,{timeout:5000});

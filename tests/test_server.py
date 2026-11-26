@@ -145,6 +145,20 @@ class SignalingTests(AioHTTPTestCase):
         await alice.close()
         await bob.close()
 
+    async def test_muted_is_shared_but_only_while_in_voice(self):
+        alice = await self.connect('alice', in_voice=True, muted=True)
+        bob = await self.connect('bob', muted=True)  # not in voice: the flag is ignored
+        state = await self.state_with(bob, lambda d: len(d['users']) == 2)
+        users = {u['id']: u for u in state['users']}
+        self.assertTrue(users['alice']['muted'])
+        self.assertFalse(users['bob']['muted'])
+        self.assertEqual(state['voice_users'], [{'id': 'alice', 'name': 'alice', 'muted': True}])
+        await alice.send_json({'type': 'presence', 'name': 'alice', 'in_voice': True, 'muted': False})
+        update = await self.state_with(bob, lambda d: d['voice_users'] and not d['voice_users'][0]['muted'])
+        self.assertFalse(update['voice_users'][0]['muted'])
+        await alice.close()
+        await bob.close()
+
     async def test_typing_reaches_others_only_and_is_rate_limited(self):
         alice = await self.connect('alice')
         bob = await self.connect('bob')

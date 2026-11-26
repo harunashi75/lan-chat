@@ -401,3 +401,25 @@ body.dark-mode .avatar,body.dark-mode .message-avatar{background:hsl(var(--h) 80
 .lightbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:14px;cursor:default;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .lightbox-close{position:absolute;top:18px;right:18px;width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.14);color:#fff;font-size:16px}
 .lightbox-close:hover{background:rgba(255,255,255,.26)}
+
+/* ---------- Mute and per-person volume ---------- */
+.mute-btn{width:100%;padding:10px;border-radius:14px;background:var(--hover-bg);border:1px solid var(--border);color:var(--text);
+  font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px;transition:.2s}
+.mute-btn:hover{border-color:var(--blue)}
+.mute-btn[hidden]{display:none}
+.mute-btn.active{background:#ff9f0a;border-color:#ff9f0a;color:#1b1200}
+.voice-badge.is-muted{color:#ff9f0a;background:rgba(255,159,10,.15)}
+
+.voice-member-block{display:grid;gap:4px}
+.voice-member-adjust{width:26px;height:26px;border-radius:9px;background:transparent;font-size:13px;flex:none;opacity:.75;transition:.15s}
+.voice-member-adjust:hover,.voice-member-adjust[aria-expanded="true"]{background:var(--hover-bg);opacity:1}
+.voice-member-adjust.is-muted{opacity:1}
+.voice-member-mic{margin-left:auto}
+.voice-member-mic.is-muted{filter:saturate(1.4)}
+.voice-controls{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;padding:8px 10px;border-radius:13px;
+  background:var(--panel-solid);border:1px solid var(--border)}
+.voice-controls input[type=range]{min-width:0;accent-color:var(--blue);cursor:pointer}
+.voice-controls output{font-size:11px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;min-width:34px;text-align:right}
+.voice-controls-mute{grid-column:1 / -1;padding:7px;border-radius:10px;background:var(--hover-bg);color:var(--text);font-size:11px;font-weight:700}
+.voice-controls-mute:hover{background:var(--blue-soft)}
+.voice-controls-mute.active{background:#ff9f0a;color:#1b1200}
