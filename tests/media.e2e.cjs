@@ -11,6 +11,7 @@ const server = spawn(path.resolve(python),['server.py'],{
 let output=''; server.stdout.on('data',d => output+=d); server.stderr.on('data',d => output+=d);
 let browser;
 const errors=[];
+const externalRequests=[];
 const pages=[];
 async function waitServer() {
   for (let i=0;i<50;i++) {
@@ -49,6 +50,7 @@ async function participant(name) {
   const page=await context.newPage(); pages.push(page);
   page.on('pageerror',error => errors.push(error.message));
   page.on('console',msg => {if(msg.type()==='error') errors.push(msg.text());});
+  page.on('request',request => {if(request.url().includes('gstatic.com')) externalRequests.push(request.url());});
   await page.goto(base);
   await page.fill('#nameInput',name);await page.click('#joinButton');
   await page.waitForFunction(() => __lanChat.ready && __lanChat.users.length>0);
@@ -66,6 +68,14 @@ try {
   await alice.waitForFunction(() => __lanChat.users.length===2);
   await alice.fill('#messageInput','Bonjour WebSocket');await alice.click('#sendButton');
   await bob.waitForFunction(() => document.getElementById('messages').textContent.includes('Bonjour WebSocket'));
+  // A lone emoji makes no external request by default; the opt-in switch loads the animated image.
+  await alice.fill('#messageInput','😀');await alice.click('#sendButton');
+  await bob.waitForFunction(() => document.querySelector('.noto-emoji-fallback'));
+  assert.deepEqual(externalRequests,[],'No request to Google by default');
+  await bob.click('#settingsToggle');await bob.check('#animatedEmoji');
+  await bob.waitForFunction(() => document.querySelector('img.noto-animated-emoji'));
+  await bob.uncheck('#animatedEmoji');
+  await bob.waitForFunction(() => !document.querySelector('img.noto-animated-emoji'));
   // Reaction by id, visible for the other participant.
   await bob.locator('.message-row').first().locator('.react-btn-trigger').click();
   await bob.locator('.quick-react-btn').first().click();

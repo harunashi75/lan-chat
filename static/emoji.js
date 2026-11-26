@@ -36,11 +36,14 @@ function notoAnimatedUrl(emoji) {
   return `${NOTO_ANIMATED_BASE}/${codepoints}/512.gif`;
 }
 
+// Animated images come from Google's servers, so they are opt-in: by default a lone emoji
+// is shown large from the system font and nothing is requested from the Internet.
 // The caller wires the image "error" event (see bindEmojiFallback) instead of an inline handler.
-export function renderMessageText(text) {
+export function renderMessageText(text, animated = false) {
   const emoji = getSingleEmojiGrapheme(text);
   if (!emoji) return escapeHtml(text);
   const safeEmoji = escapeHtml(emoji);
+  if (!animated) return `<span class="noto-emoji-fallback" aria-label="${safeEmoji}">${safeEmoji}</span>`;
   return `<span class="noto-emoji-wrapper" aria-label="${safeEmoji}">
       <img class="noto-animated-emoji" src="${notoAnimatedUrl(emoji)}" alt="${safeEmoji}" draggable="false">
       <span class="noto-emoji-fallback" style="display:none">${safeEmoji}</span>

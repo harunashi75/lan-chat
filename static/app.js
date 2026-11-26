@@ -25,6 +25,8 @@ const settingsToggle = $("settingsToggle");
 // --- 1. ÉTAT LOCAL ---
 let latestUsers = [];
 let latestUsersById = {};
+// Animated emoji are loaded from Google's servers: off unless the user opts in.
+let animatedEmoji = localStorage.getItem("lan_chat_animated_emoji") === "1";
 let lastUsersSnapshot = "";
 let joined = false;
 
@@ -57,6 +59,9 @@ function renameSelf(){
   setName(name);
   showToast("Nom mis à jour");
 }
+const animatedToggle = $("animatedEmoji");
+animatedToggle.checked = animatedEmoji;
+animatedToggle.addEventListener("change", () => setAnimatedEmoji(animatedToggle.checked));
 $("renameButton").addEventListener("click", renameSelf);
 $("renameInput").addEventListener("keydown", event => { if(event.key === "Enter") renameSelf(); });
 
@@ -97,7 +102,19 @@ function renderUsers(list, voiceUsers = []){
 
 // --- 5. AFFICHAGE DES MESSAGES & RÉACTIONS (rendu incrémental) ---
 const MAX_MESSAGES = 200;
-const messageRows = new Map(); // msg_id -> { row, reactions }
+const messageRows = new Map(); // msg_id -> { row, msg, reactions }
+
+function renderBubble(row, msg){
+  const bubble = row.querySelector(".bubble");
+  bubble.innerHTML = renderMessageText(msg.text, animatedEmoji);
+  bindEmojiFallback(bubble);
+}
+
+function setAnimatedEmoji(value){
+  animatedEmoji = value;
+  localStorage.setItem("lan_chat_animated_emoji", value ? "1" : "0");
+  messageRows.forEach(entry => renderBubble(entry.row, entry.msg));
+}
 
 function nearBottom(){
   return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
@@ -119,11 +136,11 @@ function buildMessageRow(msg){
       <div class="message-avatar">${escapeHtml(initials(msg.name))}</div>
       <div class="message-body">
         <div class="meta">${escapeHtml(msg.name)} · ${timeText}</div>
-        <div class="bubble ${isAnimatedEmojiOnly(msg.text) ? 'emoji-only-bubble' : ''}">${renderMessageText(msg.text)}</div>
+        <div class="bubble ${isAnimatedEmojiOnly(msg.text) ? 'emoji-only-bubble' : ''}"></div>
         <div class="reactions-bar"></div>
       </div>
     </div>`;
-  bindEmojiFallback(row);
+  renderBubble(row, msg);
   row.querySelector('[data-action="picker"]').addEventListener('click', event => togglePicker(event, msg.msg_id));
   row.querySelectorAll('.quick-react-btn').forEach(button => {
     button.addEventListener('click', event => toggleReaction(event, msg.msg_id, button.dataset.emoji));
@@ -155,7 +172,7 @@ function addMessage(msg, scroll = true){
   const stick = scroll && (nearBottom() || msg.id === getClientId());
   emptyEl.style.display = "none";
   const row = buildMessageRow(msg);
-  messageRows.set(msg.msg_id, { row, reactions: {} });
+  messageRows.set(msg.msg_id, { row, msg, reactions: {} });
   messagesEl.appendChild(row);
   applyReactions(msg.msg_id, msg.reactions, false);
   while(messageRows.size > MAX_MESSAGES){

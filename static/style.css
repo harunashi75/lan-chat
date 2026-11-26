@@ -113,6 +113,7 @@ button{border:0;cursor:pointer}
 .settings-content-inner{overflow:hidden}
 .settings-box.open .settings-content{grid-template-rows:1fr}
 .settings-item{margin:0 7px 7px;border:1px solid var(--border);border-radius:13px;background:var(--panel-solid)}
+.settings-switch{padding:10px 12px}
 .rename-item{display:flex;gap:6px;padding:6px}
 .rename-input{flex:1;min-width:0;height:34px;border:1px solid var(--border);border-radius:10px;padding:0 10px;outline:0;background:var(--input-bg);color:var(--text);font-size:12px}
 .rename-input:focus{border-color:var(--blue)}
