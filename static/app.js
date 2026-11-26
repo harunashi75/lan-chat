@@ -3,7 +3,7 @@ import { $, showToast, initials, escapeHtml } from "./util.js";
 import { emojiData, emojiIcons, renderMessageText, bindEmojiFallback, isAnimatedEmojiOnly } from "./emoji.js";
 import { on, connect, send, setName, setPassword, getName, getPassword, getClientId,
          getSocket, isReady } from "./session.js";
-import { initMedia, mediaDebug } from "./media.js";
+import { initMedia, mediaDebug } from "./media/index.js";
 import { initSettings, refreshProfile } from "./settings.js";
 
 const messagesEl = $("messages");
