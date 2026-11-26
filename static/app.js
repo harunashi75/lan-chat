@@ -4,6 +4,7 @@ import { emojiData, emojiIcons, renderMessageText, bindEmojiFallback, isAnimated
 import { on, connect, send, setName, setPassword, getName, getPassword, getClientId,
          getSocket, isReady } from "./session.js";
 import { initMedia, mediaDebug } from "./media.js";
+import { initSettings, refreshProfile } from "./settings.js";
 
 const messagesEl = $("messages");
 const usersEl = $("users");
@@ -16,13 +17,15 @@ const passwordInput = $("passwordInput");
 const joinButton = $("joinButton");
 const connectionEl = $("connection");
 const emptyEl = $("empty");
-const themeToggle = $("themeToggle");
-const themeIcon = $("themeIcon");
-const themeText = $("themeText");
-const settingsBox = $("settingsBox");
-const settingsToggle = $("settingsToggle");
 
 // --- 1. ÉTAT LOCAL ---
+function setConnection(text, state){
+  connectionEl.dataset.state = state;
+  const dot = document.createElement("span");
+  dot.className = "dot";
+  connectionEl.replaceChildren(dot, text);
+}
+
 let latestUsers = [];
 let latestUsersById = {};
 // Animated emoji are loaded from Google's servers: off unless the user opts in.
@@ -33,43 +36,13 @@ let joined = false;
 if (getName()) nameInput.value = getName();
 
 // --- 3. THÈME ---
-const savedTheme = localStorage.getItem("lan_chat_theme");
-if (savedTheme === "dark") {
-  document.body.classList.add("dark-mode");
-  themeIcon.textContent = "☀️";
-  themeText.textContent = "Mode clair";
-}
-
-themeToggle.addEventListener("click", () => {
-  document.body.classList.toggle("dark-mode");
-  const isDark = document.body.classList.contains("dark-mode");
-  themeIcon.textContent = isDark ? "☀️" : "🌙";
-  themeText.textContent = isDark ? "Mode clair" : "Mode sombre";
-  localStorage.setItem("lan_chat_theme", isDark ? "dark" : "light");
-});
-
-settingsToggle.addEventListener("click", () => {
-  settingsBox.classList.toggle("open");
-  if (settingsBox.classList.contains("open")) $("renameInput").value = getName();
-});
-
-function renameSelf(){
-  const name = $("renameInput").value.trim().slice(0,32);
-  if(!name || !joined) return;
-  setName(name);
-  showToast("Nom mis à jour");
-}
-const animatedToggle = $("animatedEmoji");
-animatedToggle.checked = animatedEmoji;
-animatedToggle.addEventListener("change", () => setAnimatedEmoji(animatedToggle.checked));
-$("renameButton").addEventListener("click", renameSelf);
-$("renameInput").addEventListener("keydown", event => { if(event.key === "Enter") renameSelf(); });
 
 // --- 4. AFFICHAGE DES UTILISATEURS ---
 function renderUsers(list, voiceUsers = []){
   latestUsers = list || [];
   latestUsersById = Object.fromEntries((list || []).map(u => [u.id, u]));
   const voiceMap = new Set(voiceUsers.map(v => v.id));
+  $("onlineCount").textContent = (list || []).length;
   $("voiceCount").textContent = `${voiceUsers.length} connecté${voiceUsers.length > 1 ? 's' : ''}`;
 
   const snapshot = JSON.stringify({ u: list, v: Array.from(voiceMap) });
@@ -89,7 +62,7 @@ function renderUsers(list, voiceUsers = []){
     row.innerHTML = `
       <div class="avatar">${escapeHtml(initials(user.name))}</div>
       <div class="user-info">
-        <div class="user-name">${escapeHtml(user.name)}</div>
+        <div class="user-name">${escapeHtml(user.name)}${user.id === getClientId() ? ' <span class="you-tag">vous</span>' : ""}</div>
         <div class="user-status">
           <span class="dot"></span>En ligne
           ${isUserInVoice ? '<span class="voice-badge">🎙️ En vocal</span>' : ''}
@@ -218,7 +191,7 @@ function sendMessage(){
   if(!text || !joined) return;
   if(!send({ type:"message", text })){
     showToast("Impossible d'envoyer le message");
-    connectionEl.innerHTML = '<span class="dot" style="background:#ff3b30"></span>Connexion interrompue';
+    setConnection("Connexion interrompue", "err");
     return;
   }
   input.value = "";
@@ -318,6 +291,7 @@ function join(){
     setPassword(passwordInput.value);
   }
   setName(name.slice(0,32));
+  refreshProfile();
   
   joined = true;
 
@@ -355,7 +329,7 @@ nameInput.focus();
 
 // --- 6. ÉVÉNEMENTS DE LA SESSION ---
 async function onState(data){
-  connectionEl.textContent = "Connecté";
+  setConnection("Connecté", "ok");
   renderUsers(data.users || [], data.voice_users || []);
   if (data.messages) renderMessages(data.messages);
 }
@@ -364,8 +338,18 @@ on("users", onState);
 on("message", data => addMessage(data.message));
 on("reactions", data => applyReactions(data.msg_id, data.reactions, true));
 on("error", data => showToast(data.error));
-on("status", text => { connectionEl.textContent = text; });
+on("status", text => setConnection(text, "warn"));
 on("needpassword", requirePassword);
+
+initSettings({ isJoined: () => joined, animatedEmoji, onAnimatedEmoji: setAnimatedEmoji });
+
+// Mobile: the sidebar becomes a drawer opened from the header.
+function setDrawer(open){
+  $("sidebar").classList.toggle("open", open);
+  $("drawerBackdrop").classList.toggle("show", open);
+}
+$("menuButton").addEventListener("click", () => setDrawer(!$("sidebar").classList.contains("open")));
+$("drawerBackdrop").addEventListener("click", () => setDrawer(false));
 
 initMedia();
 

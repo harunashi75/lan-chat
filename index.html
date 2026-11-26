@@ -9,94 +9,54 @@
 <body>
 
 <div class="app">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar" aria-label="Salon">
     <div class="brand">
       <div class="logo">💬</div>
-      <strong>LAN Chat <span class="app-version">1.0</span></strong>
+      <strong>LAN Chat</strong>
+      <span class="app-version">1.0</span>
     </div>
 
-    <!-- Section Canal Vocal -->
-    <div class="voice-card">
+    <section class="voice-card" aria-label="Vocal et partage d'écran">
       <div class="voice-header">
-        <span>Salon Vocal</span>
-        <span id="voiceCount" style="color:var(--muted); font-size:11px;">0 connecté</span>
+        <span>Salon vocal</span>
+        <span class="count-pill" id="voiceCount">0 connecté</span>
       </div>
-      <button class="voice-btn" id="voiceToggleBtn">
-        <span>🎙️</span> <span id="voiceBtnText">Rejoindre le vocal</span>
+      <button class="voice-btn" id="voiceToggleBtn" type="button">
+        <span aria-hidden="true">🎙️</span> <span id="voiceBtnText">Rejoindre le vocal</span>
       </button>
       <button class="screen-share-btn" id="screenShareBtn" type="button">
-        <span>🖥️</span> <span id="screenShareBtnText">Partager l'écran</span>
+        <span aria-hidden="true">🖥️</span> <span id="screenShareBtnText">Partager l'écran</span>
       </button>
-      <div class="media-controls">
-        <div class="media-setting">
-          <label class="media-heading" for="videoProfile">Qualité du partage <span class="media-tag">VIDÉO</span></label>
-          <div class="profile-select">
-            <select id="videoProfile">
-              <option value="text">Texte net · 1080p / 20 ips</option>
-              <option value="balanced" selected>Équilibré · 1080p / 30 ips</option>
-              <option value="motion">Mouvement · 1080p / 60 ips</option>
-              <option value="detail">Haute définition · 1440p / 30 ips</option>
-            </select>
-          </div>
-          <p class="media-help">Objectif d’envoi, selon la source et le réseau. Votre aperçu est local.</p>
-        </div>
-        <label class="media-switch">
-          <span class="media-switch-copy">Son du partage<small>Selon la source et votre système</small></span>
-          <input id="shareAudio" type="checkbox" role="switch"><span class="switch-track" aria-hidden="true"></span>
-        </label>
-        <label class="media-switch">
-          <span class="media-switch-copy">Voir les partages<small>Recevoir les écrans du salon</small></span>
-          <input id="receiveScreens" type="checkbox" role="switch" checked><span class="switch-track" aria-hidden="true"></span>
-        </label>
-        <details class="media-setting media-diagnostics">
-          <summary><span aria-hidden="true">◉</span> Qualité mesurée</summary>
-          <div class="media-metrics">
-            <div><strong id="metricResolution">—</strong><span>Définition</span></div>
-            <div><strong id="metricFps">—</strong><span>Images/s</span></div>
-            <div><strong id="metricBitrate">—</strong><span>Mbit/s</span></div>
-          </div>
-          <p class="media-help" id="metricContext" style="padding:0 11px">En attente d’un échange vidéo</p>
-          <pre id="mediaStats">Aucune connexion vidéo</pre>
-        </details>
-      </div>
-    </div>
+      <label class="media-switch voice-extra">
+        <span class="media-switch-copy">Voir les partages<small>Recevoir les écrans du salon</small></span>
+        <input id="receiveScreens" type="checkbox" role="switch" checked><span class="switch-track" aria-hidden="true"></span>
+      </label>
+    </section>
 
-    <div class="section-title">En ligne</div>
+    <div class="section-title">En ligne <span class="count-pill" id="onlineCount">0</span></div>
     <div class="users" id="users"></div>
-    <div class="sidebar-footer">
-      <div class="settings-box" id="settingsBox">
-        <button class="settings-toggle" id="settingsToggle" type="button">
-          <span>⚙️</span><span>Settings</span><span class="settings-arrow">⌄</span>
-        </button>
-        <div class="settings-content">
-          <div class="settings-content-inner">
-            <div class="settings-item">
-              <button class="theme-toggle" id="themeToggle" type="button">
-                <span id="themeIcon">🌙</span> <span id="themeText">Mode sombre</span>
-              </button>
-            </div>
-            <div class="settings-item rename-item">
-              <input class="rename-input" id="renameInput" maxlength="32" placeholder="Nom affiché" autocomplete="off" aria-label="Nom affiché">
-              <button class="rename-button" id="renameButton" type="button">OK</button>
-            </div>
-            <div class="settings-item settings-switch">
-              <label class="media-switch">
-                <span class="media-switch-copy">Emojis animés<small>Charge des images depuis les serveurs de Google</small></span>
-                <input id="animatedEmoji" type="checkbox" role="switch"><span class="switch-track" aria-hidden="true"></span>
-              </label>
-            </div>
-            <div class="settings-version">LAN Chat · version 1.0</div>
-          </div>
-        </div>
-      </div>
-      <div>Messages temporaires · RAM uniquement</div>
-    </div>
+
+    <button class="profile-chip" id="profileChip" type="button" title="Modifier mon profil">
+      <span class="avatar" id="selfAvatar">?</span>
+      <span class="user-info">
+        <span class="user-name" id="selfName">Invité</span>
+        <span class="user-status">Mon profil · paramètres</span>
+      </span>
+      <span class="chip-gear" aria-hidden="true">⚙️</span>
+    </button>
   </aside>
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
 
   <main class="main">
     <header class="header">
-      <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">💬</span><div class="header-title">Discussion locale</div></div>
-      <div class="connection" id="connection"><span class="dot"></span>Connexion...</div>
+      <div class="header-left">
+        <button class="header-icon menu-button" id="menuButton" type="button" aria-label="Ouvrir le menu">☰</button>
+        <div class="header-title">Discussion locale</div>
+      </div>
+      <div class="header-actions">
+        <div class="connection" id="connection" data-state="warn"><span class="dot"></span>Connexion…</div>
+        <button class="header-icon" id="settingsOpen" type="button" aria-label="Ouvrir les paramètres" title="Paramètres">⚙️</button>
+      </div>
     </header>
 
     <section class="screen-stage" id="screenStage">
@@ -115,9 +75,9 @@
           <div class="emoji-grid" id="emojiGrid"></div>
         </div>
 
-        <button class="icon-button" id="emojiButton" type="button" title="Emojis">😊</button>
-        <textarea id="messageInput" rows="1" maxlength="2000" placeholder="Écrire un message..." disabled></textarea>
-        <button class="send" id="sendButton" type="button" title="Envoyer" disabled>↑</button>
+        <button class="icon-button" id="emojiButton" type="button" title="Emojis" aria-label="Choisir un emoji">😊</button>
+        <textarea id="messageInput" rows="1" maxlength="2000" placeholder="Écrire un message..." aria-label="Message" disabled></textarea>
+        <button class="send" id="sendButton" type="button" title="Envoyer" aria-label="Envoyer le message" disabled>↑</button>
       </div>
     </div>
   </main>
@@ -136,7 +96,121 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="overlay" id="settingsOverlay">
+  <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <nav class="settings-nav" role="tablist" aria-label="Catégories de paramètres">
+      <h2 id="settingsTitle">Paramètres</h2>
+      <button class="settings-tab active" role="tab" data-tab="profile" aria-selected="true"><span aria-hidden="true">👤</span><span>Profil</span></button>
+      <button class="settings-tab" role="tab" data-tab="appearance" aria-selected="false"><span aria-hidden="true">🎨</span><span>Apparence</span></button>
+      <button class="settings-tab" role="tab" data-tab="media" aria-selected="false"><span aria-hidden="true">🖥️</span><span>Partage d'écran</span></button>
+      <button class="settings-tab" role="tab" data-tab="diagnostics" aria-selected="false"><span aria-hidden="true">📊</span><span>Diagnostic</span></button>
+      <button class="settings-tab" role="tab" data-tab="about" aria-selected="false"><span aria-hidden="true">ℹ️</span><span>À propos</span></button>
+    </nav>
+    <div class="settings-body">
+      <button class="settings-close" id="settingsClose" type="button" aria-label="Fermer les paramètres">✕</button>
+
+      <section class="settings-panel active" data-panel="profile" role="tabpanel">
+        <h3>Profil</h3>
+        <p class="settings-lead">Le nom que les autres voient dans le salon.</p>
+        <div class="profile-hero">
+          <div class="avatar large" id="profileAvatar">?</div>
+          <div>
+            <strong id="profileName">Invité</strong>
+            <div class="settings-hint">Visible par tous les participants</div>
+          </div>
+        </div>
+        <div class="settings-group">
+          <label class="field-label" for="renameInput">Nom affiché</label>
+          <div class="field-row">
+            <input class="field-input" id="renameInput" maxlength="32" autocomplete="off" placeholder="Ton nom…">
+            <button class="btn-primary" id="renameButton" type="button">Enregistrer</button>
+          </div>
+          <p class="settings-hint">Les messages déjà envoyés gardent l'ancien nom.</p>
+        </div>
+      </section>
+
+      <section class="settings-panel" data-panel="appearance" role="tabpanel">
+        <h3>Apparence</h3>
+        <p class="settings-lead">Thème et affichage des messages.</p>
+        <div class="settings-group">
+          <h4>Thème</h4>
+          <div class="segmented" id="themeChoice" role="group" aria-label="Thème">
+            <button type="button" data-theme="light" aria-pressed="false">☀️ Clair</button>
+            <button type="button" data-theme="dark" aria-pressed="false">🌙 Sombre</button>
+            <button type="button" data-theme="system" aria-pressed="false">💻 Système</button>
+          </div>
+        </div>
+        <div class="settings-group">
+          <h4>Emojis</h4>
+          <label class="media-switch">
+            <span class="media-switch-copy">Emojis animés<small>Charge des images depuis les serveurs de Google (révèle votre IP)</small></span>
+            <input id="animatedEmoji" type="checkbox" role="switch"><span class="switch-track" aria-hidden="true"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-panel" data-panel="media" role="tabpanel">
+        <h3>Partage d'écran</h3>
+        <p class="settings-lead">Réglages appliqués quand vous partagez votre écran.</p>
+        <div class="settings-group">
+          <div class="media-setting">
+            <label class="media-heading" for="videoProfile">Qualité du partage <span class="media-tag">VIDÉO</span></label>
+            <div class="profile-select">
+              <select id="videoProfile">
+                <option value="text">Texte net · 1080p / 20 ips</option>
+                <option value="balanced" selected>Équilibré · 1080p / 30 ips</option>
+                <option value="motion">Mouvement · 1080p / 60 ips</option>
+                <option value="detail">Haute définition · 1440p / 30 ips</option>
+              </select>
+            </div>
+            <p class="media-help">Objectif d'envoi, selon la source et le réseau. Votre aperçu est local. Modifiable pendant le partage.</p>
+          </div>
+          <label class="media-switch">
+            <span class="media-switch-copy">Son du partage<small>Selon la source et votre système · à choisir avant de démarrer</small></span>
+            <input id="shareAudio" type="checkbox" role="switch"><span class="switch-track" aria-hidden="true"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-panel" data-panel="diagnostics" role="tabpanel">
+        <h3>Diagnostic</h3>
+        <p class="settings-lead">Qualité réellement mesurée sur les flux vidéo.</p>
+        <div class="settings-group">
+          <div class="media-metrics">
+            <div><strong id="metricResolution">—</strong><span>Définition</span></div>
+            <div><strong id="metricFps">—</strong><span>Images/s</span></div>
+            <div><strong id="metricBitrate">—</strong><span>Mbit/s</span></div>
+          </div>
+          <p class="media-help" id="metricContext">En attente d’un échange vidéo</p>
+          <pre id="mediaStats">Aucune connexion vidéo</pre>
+        </div>
+      </section>
+
+      <section class="settings-panel" data-panel="about" role="tabpanel">
+        <h3>À propos</h3>
+        <p class="settings-lead">LAN Chat · version 1.0</p>
+        <div class="settings-group">
+          <label class="field-label" for="inviteLink">Lien du salon</label>
+          <div class="field-row">
+            <input class="field-input" id="inviteLink" readonly>
+            <button class="btn-primary" id="copyInvite" type="button">Copier</button>
+          </div>
+          <p class="settings-hint">Les invités doivent utiliser une adresse HTTPS (ou localhost) pour le micro et le partage d'écran.</p>
+        </div>
+        <div class="settings-group">
+          <h4>Confidentialité</h4>
+          <ul class="about-list">
+            <li>Messages temporaires : conservés en mémoire, effacés à l'arrêt du serveur.</li>
+            <li>Voix et écrans : directement entre participants, sans passer par le serveur.</li>
+            <li>Aucun compte, aucune télémétrie.</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script type="module" src="/static/app.js"></script>
 </body>

@@ -57,8 +57,12 @@ async function participant(name, url=base) {
   await page.waitForFunction(() => __lanChat.ready && __lanChat.users.length>0);
   return page;
 }
-async function openSettings(page) {
-  if (!(await page.locator('#settingsBox.open').count())) await page.click('#settingsToggle');
+// Settings live in a dialog: open a tab, run the action, close it.
+async function settings(page, tab, action) {
+  await page.click('#settingsOpen');
+  await page.click(`.settings-tab[data-tab="${tab}"]`);
+  await action();
+  await page.click('#settingsClose');
 }
 async function remoteVideo(page, expected=1) {
   await page.waitForFunction(count => [...document.querySelectorAll('.screen-tile video')].filter(v =>
@@ -76,9 +80,9 @@ try {
   await alice.fill('#messageInput','😀');await alice.click('#sendButton');
   await bob.waitForFunction(() => document.querySelector('.noto-emoji-fallback'));
   assert.deepEqual(externalRequests,[],'No request to Google by default');
-  await openSettings(bob);await bob.check('#animatedEmoji');
+  await settings(bob,'appearance',() => bob.check('#animatedEmoji'));
   await bob.waitForFunction(() => document.querySelector('img.noto-animated-emoji'));
-  await bob.uncheck('#animatedEmoji');
+  await settings(bob,'appearance',() => bob.uncheck('#animatedEmoji'));
   await bob.waitForFunction(() => !document.querySelector('img.noto-animated-emoji'));
   // Reaction by id, visible for the other participant.
   await bob.locator('.message-row').first().locator('.react-btn-trigger').click();
@@ -86,13 +90,13 @@ try {
   await alice.waitForSelector('.reaction-badge.active', {state:'attached', timeout:3000}).then(() => {throw new Error('Alice must not see her own active badge');}, () => {});
   await alice.waitForFunction(() => document.querySelector('.reaction-badge')?.textContent.includes('1'));
   // Renaming propagates to everyone.
-  await openSettings(bob);await bob.fill('#renameInput','Robert');await bob.click('#renameButton');
+  await settings(bob,'profile',async () => {await bob.fill('#renameInput','Robert');await bob.click('#renameButton');});
   await alice.waitForFunction(() => document.getElementById('users').textContent.includes('Robert'));
-  await alice.check('#shareAudio');await alice.click('#screenShareBtn');await remoteVideo(bob);
+  await settings(alice,'media',() => alice.check('#shareAudio'));await alice.click('#screenShareBtn');await remoteVideo(bob);
   await bob.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].some(a => a.dataset.kind==='screen' && !a.muted));
-  await alice.selectOption('#videoProfile','motion');
+  await settings(alice,'media',() => alice.selectOption('#videoProfile','motion'));
   assert.equal(await alice.evaluate(() => __lanChat.media.screenVideoTrack.contentHint),'motion');
-  await bob.check('#shareAudio');await bob.click('#screenShareBtn');await remoteVideo(alice);
+  await settings(bob,'media',() => bob.check('#shareAudio'));await bob.click('#screenShareBtn');await remoteVideo(alice);
   await Promise.all([alice.click('#voiceToggleBtn'),bob.click('#voiceToggleBtn')]);
   await alice.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].filter(a => !a.muted).length===2);
   await bob.waitForFunction(() => [...document.querySelectorAll('#audioContainer audio')].filter(a => !a.muted).length===2);
@@ -107,8 +111,9 @@ try {
   await alice.click('#screenShareBtn');await remoteVideo(bob);
   await bob.waitForFunction(() => document.getElementById('mediaStats').textContent.includes('Réception'));
   // Capture the updated interface for visual inspection, with diagnostics expanded.
-  await bob.locator('details.media-setting summary').click();
+  await bob.click('#settingsOpen');await bob.click('.settings-tab[data-tab="diagnostics"]');
   await bob.screenshot({path:process.env.LAN_CHAT_SCREENSHOT || '/tmp/lan-chat-preview.png'});
+  await bob.click('#settingsClose');
   // Simulate a transient signaling drop; active capture must reconnect automatically.
   await bob.evaluate(() => __lanChat.socket.close());
   await bob.waitForFunction(() => __lanChat.ready && __lanChat.users.length===2);

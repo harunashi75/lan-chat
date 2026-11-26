@@ -16,7 +16,8 @@
     "build:server": "node scripts/build-server.cjs",
     "dist": "npm run build:server && electron-builder",
     "dist:linux": "npm run build:server && electron-builder --linux",
-    "dist:win": "npm run build:server && electron-builder --win"
+    "dist:win": "npm run build:server && electron-builder --win",
+    "build": "npm run dist"
   },
   "keywords": [],
   "type": "commonjs",
@@ -62,7 +63,8 @@
         "AppImage"
       ],
       "category": "Network",
-      "icon": "icon.png"
+      "icon": "icon.png",
+      "syncDesktopName": true
     },
     "win": {
       "target": [
@@ -74,5 +76,6 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
-  }
+  },
+  "desktopName": "lan-chat.desktop"
 }

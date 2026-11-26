@@ -50,6 +50,11 @@ Remarques :
 - L'icône est `assets/icon.png`, regénérable avec `node scripts/make-icon.cjs`.
 - Version : modifier `version` dans `package.json`.
 
+## Interface
+
+- Barre latérale : salon vocal (rejoindre, partager l'écran, voir les partages), liste des présents et pastille de profil qui ouvre les paramètres. Sur mobile elle devient un menu ouvert par le bouton ☰.
+- Fenêtre **Paramètres** (⚙️, Échap pour fermer) : Profil (nom), Apparence (thème clair/sombre/système, emojis animés), Partage d'écran (qualité, son), Diagnostic, À propos (lien du salon, confidentialité).
+
 ## Qualité vidéo
 
 | Profil | Capture demandée au maximum | Plafond vidéo par destinataire |
@@ -65,7 +70,7 @@ Le budget global vidéo de l'émetteur est de 40 Mbit/s par défaut, réparti en
 
 Dans Electron, le sélecteur système est utilisé lorsqu'il est disponible ; sinon une fenêtre affiche les écrans et fenêtres à sélectionner. Le repli propose le son système sous Windows. Sous Linux/Wayland et macOS, sa disponibilité dépend du sélecteur système, des permissions et du moteur de capture. Un message indique lorsqu'aucune piste sonore n'a été capturée.
 
-« Diagnostic vidéo » affiche la qualité réellement envoyée/reçue, le codec, le débit, les pertes cumulées à la réception, les gels si disponibles, le RTT et le type de candidat ICE (`host`, `srflx`, `relay`). Les limitations CPU/bande passante viennent des statistiques WebRTC. Le RTT réseau n'est pas une mesure de latence écran-à-écran.
+Les paramètres > « Diagnostic » affichent la qualité réellement envoyée/reçue, le codec, le débit, les pertes cumulées à la réception, les gels si disponibles, le RTT et le type de candidat ICE (`host`, `srflx`, `relay`). Les limitations CPU/bande passante viennent des statistiques WebRTC. Le RTT réseau n'est pas une mesure de latence écran-à-écran.
 
 ## Configuration réseau
 
