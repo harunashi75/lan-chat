@@ -11,3 +11,5 @@ python/
 playwright-report/
 test-results/
 .ruff_cache/
+build/
+release/

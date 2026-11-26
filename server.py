@@ -6,6 +6,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import time
 import urllib.request
 import uuid
@@ -18,7 +19,8 @@ RTC_KEY = web.AppKey("rtc_config", dict)
 ORIGINS_KEY = web.AppKey("public_origins", set)
 PASSWORD_KEY = web.AppKey("password", str)
 
-BASE_DIR = Path(__file__).resolve().parent
+# When frozen by PyInstaller the bundled data files live under sys._MEIPASS.
+BASE_DIR = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 HOST = os.environ.get('LAN_CHAT_HOST', '0.0.0.0')
 PORT = int(os.environ.get('LAN_CHAT_PORT', '8765'))
 

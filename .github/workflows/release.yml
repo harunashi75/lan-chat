@@ -1,0 +1,43 @@
+name: Release
+
+# Builds the desktop packages. Each OS builds natively (PyInstaller cannot cross-compile).
+# Run it by hand (Actions > Release > Run workflow) or push a tag such as v1.0.0.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  package:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            script: dist:linux
+            artifact: release/*.AppImage
+          - os: windows-latest
+            script: dist:win
+            artifact: release/*.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: npm ci
+      - run: python -m venv .venv
+      - run: node scripts/venv-python.cjs -m pip install -r requirements.txt -r requirements-dev.txt
+      - run: npm run ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lan-chat-${{ matrix.os }}
+          path: ${{ matrix.artifact }}
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: ${{ matrix.artifact }}

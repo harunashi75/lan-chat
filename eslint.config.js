@@ -2,7 +2,7 @@ const js = require('@eslint/js');
 const globals = require('globals');
 
 module.exports = [
-  { ignores: ['node_modules/', '.venv/'] },
+  { ignores: ['node_modules/', '.venv/', 'build/', 'release/'] },
   js.configs.recommended,
   {
     files: ['static/**/*.js'],

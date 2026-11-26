@@ -12,7 +12,11 @@
     "test:media": "node tests/media.e2e.cjs",
     "lint": "npm run lint:js && npm run lint:py",
     "lint:js": "eslint .",
-    "lint:py": "node scripts/venv-python.cjs -m ruff check ."
+    "lint:py": "node scripts/venv-python.cjs -m ruff check .",
+    "build:server": "node scripts/build-server.cjs",
+    "dist": "npm run build:server && electron-builder",
+    "dist:linux": "npm run build:server && electron-builder --linux",
+    "dist:win": "npm run build:server && electron-builder --win"
   },
   "keywords": [],
   "type": "commonjs",
@@ -22,6 +26,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
     "eslint": "^10.15.0",
     "globals": "^17.14.0",
     "playwright": "^1.65.0"
@@ -29,5 +34,45 @@
   "private": true,
   "engines": {
     "node": ">=22.12"
+  },
+  "author": "LAN Chat",
+  "build": {
+    "appId": "local.lanchat.app",
+    "productName": "LAN Chat",
+    "artifactName": "LAN-Chat-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "desktop-preload.js",
+      "setup.html",
+      "capture-picker.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/lan-chat-server",
+        "to": "server"
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Network",
+      "icon": "icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

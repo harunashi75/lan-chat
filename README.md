@@ -32,6 +32,24 @@ npm start
 
 Choisir Hôte ou Client. Un serveur LAN Chat déjà présent sur le port configuré est réutilisé. Le menu « LAN Chat » (touche Alt si masqué) permet de changer de salon et d'afficher l'état du GPU. L'accélération graphique conserve les réglages par défaut de Chromium ; cela ne garantit pas qu'un encodeur matériel soit disponible sur chaque machine.
 
+## Packager l'application (Linux et Windows)
+
+L'application de bureau est Electron. Le paquet embarque le serveur Python gelé avec PyInstaller (`resources/server`), donc l'utilisateur final n'a besoin ni de Python ni de Node.
+
+```bash
+.venv/bin/pip install -r requirements.txt -r requirements-dev.txt   # PyInstaller
+npm run dist:linux   # release/LAN-Chat-<version>-linux-x86_64.AppImage
+npm run dist:win     # release/LAN-Chat-<version>-win-x64.exe (installateur NSIS)
+```
+
+Le serveur est gelé avec PyInstaller, qui ne cross-compile pas : construire chaque cible sur son système. Le workflow GitHub `Release` le fait automatiquement (Actions > Release > Run workflow, ou en poussant un tag `v*`, qui publie aussi les fichiers dans la release). Pour tester sans installer : `release/linux-unpacked/lan-chat` après `dist:linux`.
+
+Remarques :
+- Les paquets ne sont pas signés : Windows SmartScreen affichera un avertissement au premier lancement, et l'AppImage doit être rendue exécutable (`chmod +x`). Sans FUSE : `./LAN-Chat-*.AppImage --appimage-extract-and-run`.
+- L'application packagée lance son serveur sur le port `LAN_CHAT_PORT` (8765 par défaut) ; Windows peut demander d'autoriser le réseau local dans son pare-feu pour que d'autres machines rejoignent le salon.
+- L'icône est `assets/icon.png`, regénérable avec `node scripts/make-icon.cjs`.
+- Version : modifier `version` dans `package.json`.
+
 ## Qualité vidéo
 
 | Profil | Capture demandée au maximum | Plafond vidéo par destinataire |

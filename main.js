@@ -87,11 +87,23 @@ ipcMain.handle('capture-select', (event, selection) => {
   pending.picker.close();
 });
 
-async function startServer() {
+// Packaged app: the frozen server shipped in resources/server. Development: .venv + server.py.
+function serverCommand() {
+  if (app.isPackaged) {
+    const exe = process.platform === 'win32' ? 'lan-chat-server.exe' : 'lan-chat-server';
+    const command = path.join(process.resourcesPath, 'server', exe);
+    if (!fs.existsSync(command)) throw new Error('Serveur intégré introuvable : réinstallez LAN Chat.');
+    return {command, args: [], cwd: path.dirname(command)};
+  }
   const python = process.platform === 'win32'
     ? path.join(__dirname,'.venv','Scripts','python.exe')
     : path.join(__dirname,'.venv','bin','python');
   if (!fs.existsSync(python)) throw new Error('Lancez start.sh (Linux/macOS) ou start.bat (Windows) une première fois pour préparer Python.');
+  return {command: python, args: [path.join(__dirname,'server.py')], cwd: __dirname};
+}
+
+async function startServer() {
+  const {command, args, cwd} = serverCommand();
   const port = process.env.LAN_CHAT_PORT || '8765';
   const address = `http://localhost:${port}`;
   try {
@@ -99,7 +111,7 @@ async function startServer() {
     if (response.ok && (await response.json()).mediaTopology === 'mesh') return address;
     throw new Error('Ce port est occupé par un autre service.');
   } catch (error) { if (error.message.includes('occupé')) throw error; }
-  pythonProcess = spawn(python,[path.join(__dirname,'server.py')],{stdio:'inherit',cwd:__dirname});
+  pythonProcess = spawn(command,args,{stdio:'inherit',cwd});
   let failure;
   pythonProcess.once('error', error => { failure = error; });
   for (let attempt=0; attempt<60; attempt++) {

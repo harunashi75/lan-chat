@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 [tool.ruff]
 line-length = 120
 target-version = "py311"
-extend-exclude = [".venv", "node_modules"]
+extend-exclude = [".venv", "node_modules", "build", "release"]
 
 [tool.ruff.lint]
 # Pyflakes, pycodestyle, import order, bugbear, pyupgrade, simplify.
